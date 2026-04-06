@@ -44,14 +44,12 @@ import { USER } from './user.constants';
 import { jwtConfig } from 'src/core/config/jwt.config';
 import { Employee } from 'src/core/database/mongo/schema/employee.schema';
 import { UserDevice } from 'src/core/database/mongo/schema/device.schema';
-import { VanService } from '../van/van.service';
 
 @Injectable()
 export class UserService extends MongoRepository<User> {
   constructor(
     private readonly jwtService: JwtService,
     private readonly redis: RedisRepository,
-    private readonly vanService: VanService,
     mongo: MongoService,
     @InjectModel(Employee.name)
     private readonly employeeModel: Model<Employee>,

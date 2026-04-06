@@ -77,7 +77,6 @@ export class NotificationService extends MongoRepository<Notification> {
       deliveryStatus: NotificationDeliveryStatus.PENDING,
     });
 
-
     try {
       // Fetch active devices with push tokens
       const devices = await this.deviceModel.find({

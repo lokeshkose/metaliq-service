@@ -18,8 +18,8 @@ import {
   UserDevice,
   UserDeviceSchema,
 } from 'src/core/database/mongo/schema/device.schema';
-import { VanModule } from '../van/van.module';
-
+import { MongoService } from 'src/core/database/mongo/mongo.service';
+import { RedisRepository } from 'src/core/database/radis/radis.repository';
 
 @Module({
   imports: [
@@ -38,11 +38,9 @@ import { VanModule } from '../van/van.module';
       { name: Employee.name, schema: EmployeeSchema },
       { name: UserDevice.name, schema: UserDeviceSchema },
     ]),
-    VanModule
-    
   ],
   controllers: [UserController],
-  providers: [UserService, JwtStrategy],
+  providers: [UserService, JwtStrategy, MongoService, RedisRepository],
   exports: [UserService],
 })
 export class UserModule {}

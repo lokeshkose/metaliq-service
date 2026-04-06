@@ -224,37 +224,37 @@ export abstract class MongoRepository<T> {
    * TRANSACTIONS
    * ====================================================== */
 
- async withTransaction<R>(
-  fn: (session: ClientSession) => Promise<R>,
-  existingSession?: ClientSession,
-): Promise<R> {
-  const session = existingSession || (await this.model.db.startSession());
+  async withTransaction<R>(
+    fn: (session: ClientSession) => Promise<R>,
+    existingSession?: ClientSession,
+  ): Promise<R> {
+    const session = existingSession || (await this.model.db.startSession());
 
-  const isNewSession = !existingSession;
+    const isNewSession = !existingSession;
 
-  if (isNewSession) {
-    session.startTransaction();
+    if (isNewSession) {
+      session.startTransaction();
+    }
+
+    try {
+      const result = await fn(session);
+
+      if (isNewSession) {
+        await session.commitTransaction();
+      }
+
+      return result;
+    } catch (e) {
+      if (isNewSession) {
+        await session.abortTransaction();
+      }
+      throw e;
+    } finally {
+      if (isNewSession) {
+        session.endSession();
+      }
+    }
   }
-
-  try {
-    const result = await fn(session);
-
-    if (isNewSession) {
-      await session.commitTransaction();
-    }
-
-    return result;
-  } catch (e) {
-    if (isNewSession) {
-      await session.abortTransaction();
-    }
-    throw e;
-  } finally {
-    if (isNewSession) {
-      session.endSession();
-    }
-  }
-}
 
   /* ======================================================
    * INTERNAL
