@@ -1,23 +1,3 @@
-/**
- * User Service
- * ------------
- * Purpose : Handle authentication, session, and device lifecycle
- * Used by : UserController / Auth Guards / Token Refresh Flows
- *
- * Responsibilities:
- * - Create authentication users
- * - Login with device & session binding
- * - Issue and refresh JWT tokens
- * - Manage Redis-backed sessions
- * - Track user devices
- * - Logout and invalidate sessions
- *
- * Notes:
- * - User profile data lives in domain-specific collections (Employee, etc.)
- * - Authentication is device-scoped
- * - Sessions are cached in Redis
- */
-
 import {
   Injectable,
   UnauthorizedException,
@@ -26,62 +6,58 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+
 import { JwtService } from '@nestjs/jwt';
 import { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, ClientSession } from 'mongoose';
+
 import { LoginDto } from './dto/login.dto';
-import { Agent, UserStatus } from 'src/modules/v1/user/user.enum';
 import { RedisRepository } from 'src/core/database/radis/radis.repository';
 
 import { User, UserSchema } from 'src/core/database/mongo/schema/user.schema';
+import { Employee, EmployeeSchema } from 'src/core/database/mongo/schema/employee.schema';
+import { Customer, CustomerSchema } from 'src/core/database/mongo/schema/customer.schema';
+
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
-import { InjectModel } from '@nestjs/mongoose';
-import { ClientSession, Model } from 'mongoose';
+
 import { USER } from './user.constants';
 import { jwtConfig } from 'src/core/config/jwt.config';
-import { Employee } from 'src/core/database/mongo/schema/employee.schema';
-import { UserDevice } from 'src/core/database/mongo/schema/device.schema';
-import { VanService } from '../van/van.service';
+
+import { DeviceService } from '../device/device.service';
+import { RoleService } from '../role/role.service';
+
+import { Session, Status, Token } from 'src/shared/enums/app.enums';
+import { DeviceStatus } from 'src/shared/enums/device.enums';
+import { UserStatus } from 'src/shared/enums/user.enums';
+import { CreateUserDto } from './dto/create-user.dto';
+import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 
 @Injectable()
 export class UserService extends MongoRepository<User> {
   constructor(
     private readonly jwtService: JwtService,
     private readonly redis: RedisRepository,
-    private readonly vanService: VanService,
+    private readonly deviceService: DeviceService,
+    private readonly roleService: RoleService,
+
+    @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Employee.name) private employeeModel: Model<Employee>,
+    @InjectModel(Customer.name) private customerModel: Model<Customer>,
+
     mongo: MongoService,
-    @InjectModel(Employee.name)
-    private readonly employeeModel: Model<Employee>,
-    @InjectModel(UserDevice.name)
-    private readonly userDeviceModel: Model<UserDevice>,
   ) {
     super(mongo.getModel(User.name, UserSchema));
   }
 
   /* ======================================================
-   * CREATE USER (AUTH ONLY)
-   * ------------------------------------------------------
-   * Purpose :
-   * - Create authentication credentials
-   * - Does NOT create domain profile
-   *
-   * Notes:
-   * - Passwords are securely hashed
-   * - Unique constraints enforced at DB level
+   * CREATE USER
    * ====================================================== */
-  async createUser(
-    data: {
-      profileId: string;
-      mobile: string;
-      email?: string;
-      password: string;
-      loginId: string;
-    },
-    session?: any,
-  ) {
+  async createUser(data: CreateUserDto, session?: ClientSession) {
     try {
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
@@ -93,6 +69,8 @@ export class UserService extends MongoRepository<User> {
           password: hashedPassword,
           status: UserStatus.ACTIVE,
           loginId: data.loginId,
+          userType: data.userType,
+          userId: IdGenerator.generate('UID', 8),
         },
         { session },
       );
@@ -103,7 +81,6 @@ export class UserService extends MongoRepository<User> {
         email: user.email,
       };
     } catch (err: any) {
-      // Handles unique constraint violations
       if (err?.code === 11000) {
         throw new ForbiddenException(USER.DUPLICATE);
       }
@@ -112,40 +89,33 @@ export class UserService extends MongoRepository<User> {
   }
 
   /* ======================================================
-   * LOGIN (DEVICE ANCHORED)
-   * ------------------------------------------------------
-   * Purpose :
-   * - Authenticate user credentials
-   * - Resolve profile based on agent
-   * - Bind session to device
-   * - Issue access & refresh tokens
-   *
-   * Security:
-   * - Password hashing (bcrypt)
-   * - Device & session binding
-   * - Redis-backed session tracking
+   * RESOLVE PROFILE (NO SERVICE DEPENDENCY 🔥)
    * ====================================================== */
-  async login(
-    body: LoginDto,
-    agent: Agent,
-    sessionId: string,
-    deviceId: string,
-    ipAddress?: string,
-  ) {
-    const { loginId, password, deviceInfo } = body;
+  private async resolveProfile(user: any) {
+    switch (user.userType) {
+      case 'EMPLOYEE':
+        return this.employeeModel.findOne({ employeeId: user.profileId }).lean();
 
-    // if (!agent) {
-    //   throw new BadRequestException(USER.AGENT_MISSED);
-    // }
+      case 'CUSTOMER':
+        return this.customerModel.findOne({ customerId: user.profileId }).lean();
+
+      default:
+        return null;
+    }
+  }
+
+  /* ======================================================
+   * LOGIN
+   * ====================================================== */
+  async login(body: LoginDto, sessionId: string, deviceId: string, ipAddress?: string) {
+    const { loginId, password, deviceInfo } = body;
 
     if (!deviceInfo) {
       throw new BadRequestException('Device info missing');
     }
 
-    /* ---------- USER AUTH ---------- */
     const user: any = await this.findOneWithSelect({ loginId }, '+password');
-
-    console.log('User found for login:', user || 'No user');
+    console.log(user);
 
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException(USER.INVALID_CREDENTIALS);
@@ -156,55 +126,76 @@ export class UserService extends MongoRepository<User> {
       throw new UnauthorizedException(USER.INVALID_CREDENTIALS);
     }
 
-    /* ---------- PROFILE RESOLUTION ---------- */
-    let profile: any = null;
-
-    // if (user.agent === Agent.BACK_OFFICE) {
-    profile = await this.employeeModel.findOne({
-      employeeId: user.profileId,
-    });
-    // }
-
+    const profile: any = await this.resolveProfile(user);
     if (!profile) {
       throw new ForbiddenException(USER.PROFILE_NOT_FOUND);
     }
 
-    /* ---------- DEVICE UPSERT ---------- */
-    await this.userDeviceModel.findOneAndUpdate(
-      { userId: user.profileId, deviceId },
+    /* ---------- ROLE ---------- */
+    const role = await this.roleService.findOne({
+      roleId: profile.roleId,
+      isDeleted: false,
+    });
+
+    if (!role) throw new ForbiddenException('Role not found');
+    if (role.status !== Status.ACTIVE) throw new ForbiddenException('Role inactive');
+
+    /* ---------- DEVICE ---------- */
+    await this.deviceService.update(
+      { userId: user.userId, deviceId },
       {
-        $set: {
-          sessionId,
-          deviceType: deviceInfo.deviceType,
-          os: deviceInfo.os,
-          osVersion: deviceInfo.osVersion,
-          browser: deviceInfo.browser,
-          appVersion: deviceInfo.appVersion,
-          ipAddress,
-          lastLoginAt: new Date(),
-          fcmToken: deviceInfo.fcmToken,
-          isActive: true,
-        },
+        profileId: user.profileId,
+        userId: user.userId,
+        ...deviceInfo,
+        ipAddress,
+        sessionId,
+        lastLoginAt: new Date(),
+        status: DeviceStatus.ACTIVE,
       },
       { upsert: true },
     );
 
-    /* ---------- SESSION CACHE ---------- */
-    await this.redis.setJson(
-      `session:${sessionId}`,
-      {
-        type: 'USER',
-        profileId: user.profileId,
-        role: user.role,
-        deviceId,
-        createdAt: new Date().toISOString(),
-      },
-      60 * 60 * 24 * 7,
-    );
+    /* ---------- PERMISSIONS ---------- */
+    const permissions = new Set<string>(role.permissions || []);
 
-    /* ---------- TOKEN GENERATION ---------- */
-    const expiresIn = '1000m';
-    const expiresInMs = 100 * 60 * 1000;
+    for (const p of profile.permissionOverrides?.allow || []) {
+      permissions.add(p);
+    }
+
+    for (const p of profile.permissionOverrides?.deny || []) {
+      permissions.delete(p);
+    }
+
+    /* ---------- SESSION ---------- */
+    const sessionData = {
+      type: 'USER',
+      userId: user.userId,
+      profileId: user.profileId,
+
+      role: role.roleId,
+      roleName: role.name,
+      permissions: Array.from(permissions),
+
+      userType: user.userType,
+      name: profile?.name,
+      email: user.email,
+      mobile: user.mobile,
+
+      isActive: true,
+      roleStatus: role.status === Status.ACTIVE,
+
+      deviceId,
+      createdAt: new Date().toISOString(),
+    };
+
+    const res = await this.redis.setJson(
+      `session:${sessionId}`,
+      sessionData,
+      Session.EXPIRED_IN_MS,
+    );
+    console.log(res, '===========res=============');
+
+    /* ---------- REFRESH TOKEN ---------- */
     const refreshToken = randomUUID();
 
     await this.redis.setJson(
@@ -213,42 +204,27 @@ export class UserService extends MongoRepository<User> {
         hash: await bcrypt.hash(refreshToken, 10),
         deviceId,
       },
-      60 * 60 * 24 * 7,
+      Session.EXPIRED_IN_MS,
     );
 
-    const vanId: string = profile?.associatedVans?.[0];
+    /* ---------- ACCESS TOKEN ---------- */
+    const payload = {
+      sub: user.userId,
+      sid: sessionId,
+      did: deviceId,
+    };
 
-    const accessToken = this.jwtService.sign(
-      {
-        sub: user.profileId,
-        role: user.role,
-        sid: sessionId,
-        // deviceId,
-        name: profile?.name,
-        vanId,
-      },
-      {
-        expiresIn,
-        issuer: jwtConfig.issuer,
-        audience: jwtConfig.audience,
-      },
-    );
-
-    // if (vanId) {
-    //   const van = await this.vanService.findByVanId(vanId);
-    //   profile.van = van.data;
-    //   // const routes = await this.routeService.findAll(vanId);
-    // }
-
-    await this.updateById(user._id.toString(), {
-      lastLoginAt: new Date(),
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: Token.EXPIRED_IN,
+      issuer: jwtConfig.issuer,
+      audience: jwtConfig.audience,
     });
 
     return {
       accessToken,
       refreshToken,
-      expiresIn,
-      expiresInMs,
+      expiresIn: Token.EXPIRED_IN,
+      expiresInMs: Token.EXPIRED_IN_MS,
       sessionId,
       user: {
         profileId: user.profileId,
@@ -259,20 +235,10 @@ export class UserService extends MongoRepository<User> {
   }
 
   /* ======================================================
-   * REFRESH TOKEN (DEVICE BOUND)
-   * ------------------------------------------------------
-   * Purpose :
-   * - Issue new access token for valid session & device
-   *
-   * Security:
-   * - Refresh token hash comparison
-   * - Device & session validation
+   * REFRESH
    * ====================================================== */
   async refresh(sessionId: string, refreshToken: string, deviceId: string) {
-    const stored = await this.redis.getJson<{
-      hash: string;
-      deviceId: string;
-    }>(`refresh:${sessionId}`);
+    const stored = await this.redis.getJson<any>(`refresh:${sessionId}`);
 
     if (!stored || stored.deviceId !== deviceId) {
       throw new UnauthorizedException(USER.INVALID_REFRESH_TOKEN);
@@ -284,52 +250,38 @@ export class UserService extends MongoRepository<User> {
     }
 
     const session = await this.redis.getJson<any>(`session:${sessionId}`);
-    if (!session || session.type !== 'USER') {
-      throw new UnauthorizedException(USER.INVALID_REFRESH_TOKEN);
-    }
-
-    const device = await this.userDeviceModel.findOne({
-      sessionId,
-      deviceId,
-      isActive: true,
-    });
-
-    if (!device) {
+    if (!session) {
       throw new UnauthorizedException(USER.SESSION_EXPIRED);
     }
 
-    const expiresIn: any = USER.EXPIRED_IN;
-    const expiresInMs: number = USER.EXPIRED_IN_MILLISECONDS;
-
-    const accessToken = this.jwtService.sign(
-      {
-        sub: session.profileId,
-        role: session.role,
-        sid: sessionId,
-        deviceId,
-      },
-      {
-        expiresIn,
-        issuer: jwtConfig.issuer,
-        audience: jwtConfig.audience,
-      },
+    await this.deviceService.update(
+      { userId: session.userId, deviceId },
+      { lastLoginAt: new Date() },
     );
+
+    const payload = {
+      sub: session.userId,
+      sid: sessionId,
+      did: deviceId,
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: Token.EXPIRED_IN,
+      issuer: jwtConfig.issuer,
+      audience: jwtConfig.audience,
+    });
 
     return {
       accessToken,
-      expiresIn,
-      expiresInMs,
+      expiresIn: Token.EXPIRED_IN,
+      expiresInMs: Token.EXPIRED_IN_MS,
       message: USER.TOKEN_REFRESHED,
       statusCode: HttpStatus.OK,
     };
   }
 
   /* ======================================================
-   * LOGOUT (DEVICE SCOPED)
-   * ------------------------------------------------------
-   * Purpose :
-   * - Invalidate session & refresh token
-   * - Deactivate device binding
+   * LOGOUT
    * ====================================================== */
   async logout(req: any, res: Response, deviceId: string) {
     const sessionId = req.sessionId;
@@ -341,9 +293,9 @@ export class UserService extends MongoRepository<User> {
     await Promise.all([
       this.redis.delete(`session:${sessionId}`),
       this.redis.delete(`refresh:${sessionId}`),
-      this.userDeviceModel.updateOne(
-        { sessionId, deviceId },
-        { isActive: false },
+      this.deviceService.update(
+        { userId: req.user.userId, deviceId },
+        { status: DeviceStatus.INACTIVE },
       ),
     ]);
 
@@ -358,11 +310,7 @@ export class UserService extends MongoRepository<User> {
   }
 
   /* ======================================================
-   * DELETE / RESTORE HELPERS
-   * ------------------------------------------------------
-   * Purpose :
-   * - Soft delete authentication record
-   * - Restore user credentials securely
+   * DELETE
    * ====================================================== */
   async delete(profileId: string, options?: any) {
     const user = await this.softDelete({ profileId }, options);
@@ -378,18 +326,10 @@ export class UserService extends MongoRepository<User> {
     };
   }
 
-  async restoreUser(
-    data: {
-      profileId: string;
-      mobile: string;
-      email?: string;
-      password: string;
-      isDeleted: boolean;
-      status: UserStatus;
-      loginId: string;
-    },
-    session: ClientSession,
-  ) {
+  /* ======================================================
+   * RESTORE
+   * ====================================================== */
+  async restoreUser(data: any, session: ClientSession) {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     await this.updateOne(

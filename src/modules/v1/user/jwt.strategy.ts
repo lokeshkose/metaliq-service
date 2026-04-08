@@ -3,16 +3,19 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 
-import { JwtPayload } from '../../../shared/interfaces/jwt-payload.interface';
 import { jwtConfig } from '../../../core/config/jwt.config';
 import { jwtExtractor } from '../../../core/auth/jwt-extractor';
 import { RequestContextStore } from 'src/core/context/request-context';
-
+import { RedisRepository } from 'src/core/database/radis/radis.repository';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly redis: RedisRepository,
+  ) {
     const secret = config.get<string>('JWT_SECRET');
+
     if (!secret) {
       throw new Error('JWT_SECRET missing');
     }
@@ -25,32 +28,48 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
-    if (!payload?.sub || !payload?.sid) {
-      throw new UnauthorizedException('Invalid JWT payload');
+  async validate(payload: any) {
+    /* ---------- BASIC VALIDATION ---------- */
+    if (!payload?.sub || !payload?.sid || !payload?.did) {
+      throw new UnauthorizedException('Invalid token payload');
     }
 
-    /**
-     * ✅ SET CONTEXT HERE (MOST IMPORTANT PART)
-     */
-    const store = RequestContextStore.getStore();
+    /* ---------- FETCH SESSION ---------- */
+    const session = await this.redis.getJson<any>(`session:${payload.sid}`);
+    console.log(session, 'session');
 
-    if (store) {
-      store.userId = payload.sub;
-      store.role = payload.role;
-      store.name = payload.name;
-      store.vanId = payload.vanId; // ✅ FIX: SET VAN ID
+    if (!session) {
+      throw new UnauthorizedException('Session expired');
     }
 
-    /**
-     * ✅ Attach to request.user
-     */
+    /* ---------- SECURITY CHECKS ---------- */
+    if (session.deviceId !== payload.did) {
+      throw new UnauthorizedException('Device mismatch');
+    }
+
+    if (session.userId !== payload.sub) {
+      throw new UnauthorizedException('Token mismatch');
+    }
+
+    /* ---------- RETURN USER ---------- */
     return {
-      userId: payload.sub,
-      role: payload.role,
+      userId: session.userId,
+      profileId: session.profileId,
+
+      name: session.name,
+      email: session.email,
+      mobile: session.mobile,
+
+      role: session.role,
+      roleName: session.roleName,
+      permissions: session.permissions,
+
+      userType: session.userType,
+      isActive: session.isActive,
+      roleStatus: session.roleStatus,
+
+      deviceId: session.deviceId,
       sessionId: payload.sid,
-      name: payload.name,
-      vanId: payload.vanId, // optional but useful
     };
   }
 }

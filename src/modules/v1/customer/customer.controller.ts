@@ -1,4 +1,3 @@
-
 /**
  * Customer Controller
  * --------------------
@@ -9,7 +8,7 @@
  * - Create customers
  * - Fetch customers with filters & pagination
  * - Retrieve individual customer details
- * - Update customers
+ * - Update customer
  * - Soft delete customers
  *
  * Notes:
@@ -39,11 +38,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from 'src/core/swagger/api-error.response.swagger';
 
-import {
-  API_MODULE,
-  API_MODULE_ENABLE_KEYS,
-  V1,
-} from 'src/shared/constants/api.constants';
+import { API_MODULE, API_MODULE_ENABLE_KEYS, V1 } from 'src/shared/constants/api.constants';
 
 import { Permissions } from 'src/core/decorators/permission.decorator';
 
@@ -52,7 +47,6 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
 import { CUSTOMER } from './customer.constants';
-import { Public } from 'src/core/decorators/public.decorator';
 
 @ApiTags('Customer')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.CUSTOMER)
@@ -63,7 +57,6 @@ import { Public } from 'src/core/decorators/public.decorator';
   path: API_MODULE.CUSTOMER,
   version: V1,
 })
-@Public()
 export class CustomerController {
   constructor(private readonly service: CustomerService) {}
 
@@ -76,11 +69,7 @@ export class CustomerController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create customer' })
   @ApiBody({ type: CreateCustomerDto })
-  @ApiSuccessResponse(
-    { customerId: 'CUST-001' },
-    CUSTOMER.CREATED,
-    HttpStatus.CREATED,
-  )
+  @ApiSuccessResponse({ customerId: 'CUST-001' }, CUSTOMER.CREATED, HttpStatus.CREATED)
   async create(@Body() dto: CreateCustomerDto) {
     return this.service.create(dto);
   }
@@ -101,7 +90,7 @@ export class CustomerController {
    */
   @Permissions('CUSTOMER_VIEW')
   @Get(':customerId')
-  @ApiParam({ name: 'customerId' })
+  @ApiParam({ name: 'customerId', description: 'Customer customerId' })
   async findOne(@Param('customerId') customerId: string) {
     return this.service.findByCustomerId(customerId);
   }
@@ -112,10 +101,8 @@ export class CustomerController {
    */
   @Permissions('CUSTOMER_UPDATE')
   @Patch(':customerId')
-  async update(
-    @Param('customerId') customerId: string,
-    @Body() dto: UpdateCustomerDto,
-  ) {
+  @ApiParam({ name: 'customerId', description: 'Customer customerId' })
+  async update(@Param('customerId') customerId: string, @Body() dto: UpdateCustomerDto) {
     return this.service.update(customerId, dto);
   }
 
@@ -125,6 +112,7 @@ export class CustomerController {
    */
   @Permissions('CUSTOMER_DELETE')
   @Delete(':customerId')
+  @ApiParam({ name: 'customerId', description: 'Customer customerId' })
   async delete(@Param('customerId') customerId: string) {
     return this.service.delete(customerId);
   }

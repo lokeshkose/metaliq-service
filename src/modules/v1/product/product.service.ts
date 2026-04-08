@@ -1,23 +1,3 @@
-/**
- * Product Service
- * ----------------
- * Purpose : Handles business logic for product master lifecycle management
- * Used by : ProductController
- *
- * Responsibilities:
- * - Create product master records
- * - Restore soft-deleted products
- * - Fetch products with filters and pagination
- * - Retrieve single product details
- * - Update product information
- * - Soft-delete products
- *
- * Notes:
- * - All write operations are transaction-safe
- * - Product master acts as source of truth
- * - Inventory quantities are handled separately
- * - Soft deletes preserve audit history
- */
 
 import {
   Injectable,
@@ -28,17 +8,17 @@ import {
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
+import { FilterQuery } from 'src/core/database/mongo/mongo.interface';
 
-import {
-  Product,
-  ProductSchema,
-} from 'src/core/database/mongo/schema/product.schema';
+import { Product, ProductSchema } from 'src/core/database/mongo/schema/product.schema';
 
-import { ProductQueryDto } from './dto/product-query.dto';
 import { PRODUCT } from './product.constants';
-import { ProductCreateDto } from './dto/create-product.dto';
-import { ProductUpdateDto } from './dto/update-product.dto';
-import { RequestContextStore } from 'src/core/context/request-context';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductQueryDto } from './dto/product-query.dto';
+import { IdGenerator } from 'src/shared/utils/id-generator.utils';
+import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
+import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
 @Injectable()
 export class ProductService extends MongoRepository<Product> {
@@ -46,344 +26,145 @@ export class ProductService extends MongoRepository<Product> {
     super(mongo.getModel(Product.name, ProductSchema));
   }
 
-  /**
-   * Create Product
-   * --------------
-   * Purpose : Create new product or restore soft-deleted product
-   *
-   * Flow:
-   * - Check for existing product (including soft-deleted)
-   * - Restore soft-deleted product if found
-   * - Create new product if not exists
-   *
-   * Notes:
-   * - Operation is fully transactional
-   * - Prevents duplicate active products
-   */
-  async create(payload: ProductCreateDto) {
-    return this.withTransaction(async (session) => {
-      // Check existing product (including soft-deleted)
-      const existing = await this.findOne(
-        {
-          $or: [
-            { productId: payload.productId },
-            { productSysCode: payload.productSysCode },
-          ],
-        },
-        { session, includeDeleted: true },
-      );
+  async create(payload: CreateProductDto) {
+    try {
+      return await this.withTransaction(async (session) => {
+        if (payload.name) {
+          payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
+        }
+        const filter: FilterQuery<Product> = {};
 
-      // Prevent duplicate active product
-      if (existing && !existing.isDeleted) {
-        throw new ConflictException(PRODUCT.DUPLICATE);
-      }
+        
 
-      // Restore soft-deleted product
-      if (existing?.isDeleted) {
-        await this.updateById(
-          existing._id.toString(),
+        const existing = await this.findOne(filter, {
+          session,
+          includeDeleted: true,
+        });
+
+        if (existing && !existing.isDeleted) {
+          throw new ConflictException(PRODUCT.DUPLICATE);
+        }
+
+        if (existing?.isDeleted) {
+          await this.updateById(
+            existing._id.toString(),
+            {
+              ...payload,
+              status: 'ACTIVE',
+              isDeleted: false,
+            },
+            { session },
+          );
+
+          return {
+            statusCode: HttpStatus.OK,
+            message: PRODUCT.CREATED,
+            data: { productId: existing.productId },
+          };
+        }
+
+        const doc = await this.save(
           {
-            name: payload.name,
-            categoryId: payload.categoryId,
-            productSysCode: payload.productSysCode,
-            price: payload.price,
-            netWeight: payload.netWeight,
-            priceType: payload.priceType,
-            unitType: payload.unitType,
-            unitSize: payload.unitSize,
-            unitQtyInCase: payload.unitQtyInCase,
-            status: 'ACTIVE',
-            isDeleted: false,
+            productId: IdGenerator.generate('PROD', 8),
+            ...payload,
           },
           { session },
         );
 
         return {
-          statusCode: HttpStatus.OK,
+          statusCode: HttpStatus.CREATED,
           message: PRODUCT.CREATED,
-          data: { productId: existing.productId },
+          data: doc,
         };
-      }
-
-      // Create new product
-      const product = await this.save(
-        {
-          productId: payload.productId,
-          name: payload.name,
-          categoryId: payload.categoryId,
-          productSysCode: payload.productSysCode,
-          casePrice: payload.price,
-          caseWeight: payload.netWeight,
-          priceType: payload.priceType,
-          unitType: payload.unitType,
-          unitSize: payload.unitSize,
-          unitQtyInCase: payload.unitQtyInCase,
-        },
-        { session },
-      );
-
-      return {
-        statusCode: HttpStatus.CREATED,
-        message: PRODUCT.CREATED,
-        data: product,
-      };
-    });
+      });
+    } catch (error) {
+      this.handleDuplicateError(error);
+    }
   }
 
-  /**
-   * Get Products
-   * ------------
-   * Purpose : Retrieve products with filtering and pagination
-   * Supports: Search, multiple categories, multiple brands, price range, stock status, discounts
-   */
   async findAll(query: ProductQueryDto) {
-    const {
-      searchText,
-      categoryIds,
-      brands,
-      status,
-      minPrice,
-      maxPrice,
-      inStockOnly,
-      hasDiscount,
-      page = 1,
-      limit = 20,
-    } = query;
+    const { searchText, status, page = 1, limit = 20 } = query;
 
-    /**
-     * ================= GET USER =================
-     */
-    const ctx = RequestContextStore.getStore();
-    const userId = ctx?.userId;
+    const filter: FilterQuery<Product> = {};
 
-    /**
-     * ================= BUILD MATCH =================
-     */
-    const match: any = {};
-
-    if (status) match.status = status;
-
-    if (categoryIds) {
-      match.categoryId = { $in: categoryIds.split(',') };
-    }
-
-    if (brands) {
-      match.brand = { $in: brands.split(',') };
-    }
-
-    if (minPrice || maxPrice) {
-      match.price = {};
-      if (minPrice) match.price.$gte = Number(minPrice);
-      if (maxPrice) match.price.$lte = Number(maxPrice);
-    }
-
-    if (hasDiscount === 'true') {
-      match.discount = { $gt: 0 };
-    }
+    if (status) filter.status = status;
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      match.$or = [
-        { name: regex },
-        { productSysCode: regex },
-        { productId: regex },
-        { sku: regex },
-        { brand: regex },
-      ];
+      filter.$or = [{ productId: regex }];
     }
 
-    /**
-     * ================= PAGINATION =================
-     */
-    const skip = (page - 1) * limit;
-
-    /**
-     * ================= PIPELINE =================
-     */
-    const pipeline: any[] = [
-      { $match: match },
-
-      /**
-       * 1. Get van from user
-       */
-      {
-        $lookup: {
-          from: 'vans',
-          let: { userId: userId },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $in: ['$$userId', '$associatedUsers'], // adjust if object
-                },
-              },
-            },
-            { $project: { vanId: 1, _id: 0 } },
-          ],
-          as: 'van',
-        },
-      },
-
-      {
-        $addFields: {
-          vanId: { $arrayElemAt: ['$van.vanId', 0] },
-        },
-      },
-
-      /**
-       * 2. Lookup inventory
-       */
-      {
-        $lookup: {
-          from: 'inventories',
-          let: { productId: '$productId', vanId: '$vanId' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$productId', '$$productId'] },
-                    { $eq: ['$vanId', '$$vanId'] },
-                  ],
-                },
-              },
-            },
-            {
-              $project: {
-                quantity: 1, // adjust field
-                _id: 0,
-              },
-            },
-          ],
-          as: 'inventory',
-        },
-      },
-
-      /**
-       * 3. Add stock
-       */
-      {
-        $addFields: {
-          stock: {
-            $ifNull: [{ $arrayElemAt: ['$inventory.quantity', 0] }, 0],
-          },
-        },
-      },
-
-      /**
-       * 4. Filter inStock
-       */
-      ...(inStockOnly === 'true' ? [{ $match: { stock: { $gt: 0 } } }] : []),
-
-      /**
-       * 5. Clean fields
-       */
-      {
-        $project: {
-          inventory: 0,
-          van: 0,
-        },
-      },
-
-      /**
-       * 6. Sort + paginate
-       */
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limit },
-    ];
-
-    /**
-     * ================= EXECUTE =================
-     */
-    const items = await this.model.aggregate(pipeline);
-
-    /**
-     * ================= COUNT =================
-     */
-    const totalResult = await this.model.aggregate([
-      { $match: match },
-      { $count: 'total' },
-    ]);
-
-    const total = totalResult[0]?.total || 0;
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: PRODUCT.FETCHED,
-      data: items,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  /**
-   * Get Product by ID
-   * -----------------
-   * Purpose : Retrieve a single product
-   */
-  async findByProductId(productId: string) {
-    const product = await this.findOne({ productId }, { lean: true });
-
-    if (!product) {
-      throw new NotFoundException(PRODUCT.NOT_FOUND);
-    }
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: PRODUCT.FETCHED,
-      data: product,
-    };
-  }
-
-  /**
-   * Update Product
-   * --------------
-   * Purpose : Update product master data
-   */
-  async update(productId: string, payload: ProductUpdateDto) {
-    const product = await this.updateOne({ productId }, payload);
-
-    if (!product) {
-      throw new NotFoundException(PRODUCT.NOT_FOUND);
-    }
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: PRODUCT.UPDATED,
-      data: product,
-    };
-  }
-
-  /**
-   * Delete Product (Soft Delete)
-   * ---------------------------
-   * Purpose : Soft delete product
-   */
-  async delete(productId: string) {
-    const deletedProduct = await this.withTransaction(async (session) => {
-      const existing = await this.findOne(
-        { productId, isDeleted: false },
-        { session },
-      );
-
-      if (!existing) {
-        throw new NotFoundException(PRODUCT.NOT_FOUND);
-      }
-
-      await this.softDelete({ productId }, { session });
-
-      return existing;
+    const result = await this.paginate(filter, {
+      page,
+      limit,
+      sort: { createdAt: -1 },
+      lean: true,
     });
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: PRODUCT.FETCHED,
+      data: result.items,
+      meta: result.meta,
+    };
+  }
+
+  async findByProductId(productId: string) {
+    const doc = await this.findOne({ productId }, { lean: true });
+
+    if (!doc) throw new NotFoundException(PRODUCT.NOT_FOUND);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: PRODUCT.FETCHED,
+      data: doc,
+    };
+  }
+
+  async update(productId: string, dto: UpdateProductDto) {
+    try {
+      return await this.withTransaction(async (session) => {
+        if (dto.name) {
+          dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
+        }
+
+        const doc = await this.updateOne(
+          { productId },
+          dto,
+          { session, new: true },
+        );
+
+        if (!doc) throw new NotFoundException(PRODUCT.NOT_FOUND);
+
+        return {
+          statusCode: HttpStatus.OK,
+          message: PRODUCT.UPDATED,
+          data: doc,
+        };
+      });
+    } catch (error) {
+      this.handleDuplicateError(error);
+    }
+  }
+
+  async delete(productId: string) {
+    const existing = await this.findOne({ productId });
+
+    if (!existing) throw new NotFoundException(PRODUCT.NOT_FOUND);
+
+    await this.softDelete({ productId });
 
     return {
       statusCode: HttpStatus.OK,
       message: PRODUCT.DELETED,
-      data: deletedProduct,
+      data: existing,
     };
+  }
+
+  private handleDuplicateError(error: any): never {
+    if (error?.code === 11000 || error?.code === 11001) {
+      throw new ConflictException(PRODUCT.DUPLICATE);
+    }
+    throw error;
   }
 }

@@ -1,21 +1,11 @@
+import { PartialType, OmitType } from '@nestjs/swagger';
+import { CreateProductCategoryDto } from './create-product-category.dto';
+
 /**
- * Product Category Update DTO
- * ---------------------------
- * Purpose : Update existing product category
- * Used by : BACK_OFFICE / ADMIN
+ * UpdateProductCategoryDto
+ * =================
+ * DTO for updating ProductCategory
  */
-
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
-
-export class ProductCategoryUpdateDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @ApiPropertyOptional({ example: 'ACTIVE' })
-  @IsOptional()
-  @IsString()
-  status?: string;
-}
+export class UpdateProductCategoryDto extends PartialType(
+  OmitType(CreateProductCategoryDto, [] as const),
+) {}

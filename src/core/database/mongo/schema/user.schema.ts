@@ -16,15 +16,22 @@
  */
 
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Agent, UserStatus } from 'src/modules/v1/user/user.enum';
+import { UserStatus, UserType } from 'src/shared/enums/user.enums';
 
-@Schema({
-  collection: 'users',
-})
+@Schema()
 export class User {
   /* ======================================================
    * IDENTITY
    * ====================================================== */
+
+  // userId
+  @Prop({
+    type: String,
+    required: true,
+    trim: true,
+    index: true,
+  })
+  userId!: string;
 
   // customerId OR employeeId
   @Prop({
@@ -33,7 +40,7 @@ export class User {
     unique: true,
     index: true,
   })
-  profileId: string;
+  profileId!: string;
 
   /* ======================================================
    * LOGIN CREDENTIALS
@@ -46,7 +53,7 @@ export class User {
     trim: true,
     index: true,
   })
-  loginId: string;
+  loginId!: string;
 
   // Unique PER AGENT (composite index below)
   @Prop({
@@ -54,7 +61,7 @@ export class User {
     required: true,
     index: true,
   })
-  mobile: string;
+  mobile!: string;
 
   // Optional, unique PER AGENT (composite index below)
   @Prop({
@@ -71,7 +78,7 @@ export class User {
     required: true,
     select: false,
   })
-  password: string;
+  password!: string;
 
   /* ======================================================
    * STATUS & METADATA
@@ -83,7 +90,14 @@ export class User {
     default: UserStatus.ACTIVE,
     index: true,
   })
-  status: UserStatus;
+  status!: UserStatus;
+
+  @Prop({
+    type: String,
+    enum: UserType,
+    index: true,
+  })
+  userType!: UserType;
 
   @Prop()
   lastLoginAt?: Date;
@@ -96,16 +110,10 @@ export const UserSchema = SchemaFactory.createForClass(User);
  * ====================================================== */
 
 // 🔐 Same loginId cannot exist twice within same agent
-UserSchema.index(
-  { loginId: 1, agent: 1 },
-  { unique: true },
-);
+UserSchema.index({ loginId: 1, agent: 1 }, { unique: true });
 
 // 🔐 Same mobile cannot exist twice within same agent
-UserSchema.index(
-  { mobile: 1, agent: 1 },
-  { unique: true, sparse: true },
-);
+UserSchema.index({ mobile: 1, agent: 1 }, { unique: true, sparse: true });
 
 // 🔐 Same email cannot exist twice within same agent
 UserSchema.index(
@@ -116,5 +124,3 @@ UserSchema.index(
     sparse: true,
   },
 );
-
-

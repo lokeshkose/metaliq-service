@@ -1,8 +1,8 @@
 export const PRODUCT_CATEGORY = {
-  CREATED: 'Product category created successfully',
-  FETCHED: 'Product category fetched successfully',
-  UPDATED: 'Product category updated successfully',
-  DELETED: 'Product category deleted successfully',
-  NOT_FOUND: 'Product category not found',
-  DUPLICATE: 'Product category already exists',
+  CREATED: 'ProductCategory created successfully',
+  FETCHED: 'ProductCategory fetched successfully',
+  UPDATED: 'ProductCategory updated successfully',
+  DELETED: 'ProductCategory deleted successfully',
+  NOT_FOUND: 'ProductCategory not found',
+  DUPLICATE: 'ProductCategory already exists',
 };

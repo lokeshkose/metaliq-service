@@ -1,16 +1,30 @@
-/**
- * Product Category Create DTO
- * ---------------------------
- * Purpose : Create new product category
- * Used by : BACK_OFFICE / ADMIN
- */
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
+import { ProductCategoryStatus } from 'src/shared/enums/product-category.enums';
 
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
-
-export class ProductCategoryCreateDto {
-
-  @ApiProperty({ example: 'Dairy Products' })
+export class CreateProductCategoryDto {
+  /**
+   * CreateProductCategoryDto
+   * =================
+   * DTO for creating ProductCategory
+   */
+  @ApiPropertyOptional({ type: String })
+  @IsOptional()
   @IsString()
-  name: string;
+  categoryId?: string;
+
+  @ApiPropertyOptional({ type: String })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ enum: ProductCategoryStatus, enumName: 'ProductCategoryStatus' })
+  @IsOptional()
+  @IsEnum(ProductCategoryStatus)
+  status?: ProductCategoryStatus;
+
+  @ApiPropertyOptional({ type: Boolean })
+  @IsOptional()
+  @IsBoolean()
+  isDeleted?: boolean;
 }

@@ -1,11 +1,13 @@
 export interface JwtPayload {
-  sub: string; // profileId / userId
+  sub: string;
   role: string;
   sid: string; // sessionId
   iat?: number;
   exp?: number;
   name: string;
   deviceId: string;
-  vanId?: string; // optional but useful
-  vanName?: string; // optional but useful
+  profileId: string;
+  mobile: string;
+  email: string;
+  userType: string;
 }

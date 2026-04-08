@@ -28,3 +28,12 @@ export enum AuditAction {
   DELETE = 'DELETE',
   RESTORE = 'RESTORE',
 }
+
+export enum Token {
+  EXPIRED_IN = '1000m',
+  EXPIRED_IN_MS = 100 * 60 * 1000,
+}
+
+export enum Session {
+  EXPIRED_IN_MS = 100 * 60 * 1000,
+}

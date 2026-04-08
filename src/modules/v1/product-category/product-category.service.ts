@@ -1,44 +1,21 @@
-/**
- * Product Category Service
- * -----------------------
- * Purpose : Handles business logic for product category lifecycle management
- * Used by : ProductCategoryController
- *
- * Responsibilities:
- * - Create product categories
- * - Restore soft-deleted categories
- * - Fetch category lists with filters and pagination
- * - Retrieve single category details
- * - Update category information
- * - Soft-delete categories
- *
- * Notes:
- * - All write operations are transaction-safe
- * - Category name uniqueness is enforced
- * - Soft deletes are used to preserve audit history
- */
-
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  HttpStatus,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpStatus } from '@nestjs/common';
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
+import { FilterQuery } from 'src/core/database/mongo/mongo.interface';
 
-import { PRODUCT_CATEGORY } from './product-category.constants';
 import {
   ProductCategory,
   ProductCategorySchema,
-} from 'src/core/database/mongo/schema/product-category';
-import { ProductCategoryCreateDto } from './dto/create-product-category.dto';
+} from 'src/core/database/mongo/schema/product-category.schema';
+
+import { PRODUCT_CATEGORY } from './product-category.constants';
+import { CreateProductCategoryDto } from './dto/create-product-category.dto';
+import { UpdateProductCategoryDto } from './dto/update-product-category.dto';
 import { ProductCategoryQueryDto } from './dto/product-category-query.dto';
-import { ProductCategoryUpdateDto } from './dto/update-product-category.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
-import { StringCaseUtils } from 'src/shared/utils/string-case.units';
+import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
+import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
 @Injectable()
 export class ProductCategoryService extends MongoRepository<ProductCategory> {
@@ -46,95 +23,70 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     super(mongo.getModel(ProductCategory.name, ProductCategorySchema));
   }
 
-  /**
-   * Create Product Category
-   * ----------------------
-   * Purpose : Create a new product category or restore soft-deleted category
-   *
-   * Flow:
-   * - Check for existing category (including soft-deleted)
-   * - Restore soft-deleted category if found
-   * - Create new category if not exists
-   *
-   * Notes:
-   * - Operation is fully transactional
-   * - Prevents duplicate active categories
-   */
-  async create(payload: ProductCategoryCreateDto) {
-    return this.withTransaction(async (session) => {
-      // Check existing category (including soft-deleted)
-      const titleCaseName = StringCaseUtils.titleCase(payload.name);
-      const existing = await this.findOne(
-        {
-          name: titleCaseName,
-        },
-        { session, includeDeleted: true },
-      );
+  async create(payload: CreateProductCategoryDto) {
+    try {
+      return await this.withTransaction(async (session) => {
+        if (payload.name) {
+          payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
+        }
+        const filter: FilterQuery<ProductCategory> = {};
 
-      // Prevent duplicate active category
-      if (existing && !existing.isDeleted) {
-        throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);
-      }
+        const existing = await this.findOne(filter, {
+          session,
+          includeDeleted: true,
+        });
 
-      // Restore soft-deleted category
-      if (existing?.isDeleted) {
-        await this.updateById(
-          existing._id.toString(),
+        if (existing && !existing.isDeleted) {
+          throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);
+        }
+
+        if (existing?.isDeleted) {
+          await this.updateById(
+            existing._id.toString(),
+            {
+              ...payload,
+              status: 'ACTIVE',
+              isDeleted: false,
+            },
+            { session },
+          );
+
+          return {
+            statusCode: HttpStatus.OK,
+            message: PRODUCT_CATEGORY.CREATED,
+            data: { categoryId: existing.categoryId },
+          };
+        }
+
+        const doc = await this.save(
           {
-            name: titleCaseName,
-            status: 'ACTIVE',
-            isDeleted: false,
+            categoryId: IdGenerator.generate('PROD', 8),
+            ...payload,
           },
           { session },
         );
 
         return {
-          statusCode: HttpStatus.OK,
+          statusCode: HttpStatus.CREATED,
           message: PRODUCT_CATEGORY.CREATED,
-          data: { categoryId: existing.categoryId },
+          data: doc,
         };
-      }
-
-      // Create new category
-      const category = await this.save(
-        {
-          categoryId: IdGenerator.generate('CAT', 8),
-          name: titleCaseName,
-        },
-        { session },
-      );
-
-      return {
-        statusCode: HttpStatus.CREATED,
-        message: PRODUCT_CATEGORY.CREATED,
-        data: category,
-      };
-    });
+      });
+    } catch (error) {
+      this.handleDuplicateError(error);
+    }
   }
 
-  /**
-   * Get Product Categories (List)
-   * -----------------------------
-   * Purpose : Retrieve categories with filtering and pagination
-   *
-   * Supports:
-   * - Status filtering
-   * - Free-text search
-   * - Pagination & sorting
-
-  */
   async findAll(query: ProductCategoryQueryDto) {
-    const { status, searchText, page = 1, limit = 20 } = query;
+    const { searchText, status, page = 1, limit = 20 } = query;
 
-    const filter: Record<string, any> = {};
+    const filter: FilterQuery<ProductCategory> = {};
 
-    if (status) {
-      filter.status = status;
-    }
+    if (status) filter.status = status;
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ categoryId: regex }, { name: regex }];
+      filter.$or = [{ categoryId: regex }];
     }
 
     const result = await this.paginate(filter, {
@@ -152,90 +104,58 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     };
   }
 
-  /**
-   * Get Product Category by ID
-   * --------------------------
-   * Purpose : Retrieve a single category
-   */
   async findByCategoryId(categoryId: string) {
-    const category = await this.findOne({ categoryId }, { lean: true });
+    const doc = await this.findOne({ categoryId }, { lean: true });
 
-    if (!category) {
-      throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
-    }
+    if (!doc) throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
 
     return {
       statusCode: HttpStatus.OK,
       message: PRODUCT_CATEGORY.FETCHED,
-      data: category,
+      data: doc,
     };
   }
 
-  /**
-   * Update Product Category
-   * -----------------------
-   * Purpose : Update editable category fields
-   */
-  async update(categoryId: string, dto: ProductCategoryUpdateDto) {
-    // 1️⃣ Handle name formatting + validation
-    if (dto.name) {
-      const formattedName = StringCaseUtils.titleCase(dto.name.trim());
+  async update(categoryId: string, dto: UpdateProductCategoryDto) {
+    try {
+      return await this.withTransaction(async (session) => {
+        if (dto.name) {
+          dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
+        }
 
-      // Check duplicate (excluding current category)
-      const existing = await this.findOne({
-        name: formattedName,
-        categoryId: { $ne: categoryId } as any,
+        const doc = await this.updateOne({ categoryId }, dto, { session, new: true });
+
+        if (!doc) throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+
+        return {
+          statusCode: HttpStatus.OK,
+          message: PRODUCT_CATEGORY.UPDATED,
+          data: doc,
+        };
       });
-
-      if (existing) {
-        throw new BadRequestException(PRODUCT_CATEGORY.DUPLICATE);
-      }
-
-      dto.name = formattedName;
+    } catch (error) {
+      this.handleDuplicateError(error);
     }
-
-    // 2️⃣ Update category
-    const category = await this.updateOne({ categoryId }, dto);
-
-    if (!category) {
-      throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
-    }
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: PRODUCT_CATEGORY.UPDATED,
-      data: category,
-    };
   }
 
-  /**
-   * Delete Product Category (Soft Delete)
-   * ------------------------------------
-   * Purpose : Soft delete product category
-   *
-   * Notes:
-   * - Records remain for audit purposes
-   */
   async delete(categoryId: string) {
-    const deletedCategory = await this.withTransaction(async (session) => {
-      const existing = await this.findOne(
-        { categoryId, isDeleted: false },
-        { session },
-      );
+    const existing = await this.findOne({ categoryId });
 
-      if (!existing) {
-        throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
-      }
+    if (!existing) throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
 
-      await this.softDelete({ categoryId }, { session });
-
-      return existing;
-    });
+    await this.softDelete({ categoryId });
 
     return {
       statusCode: HttpStatus.OK,
       message: PRODUCT_CATEGORY.DELETED,
-      data: deletedCategory,
+      data: existing,
     };
+  }
+
+  private handleDuplicateError(error: any): never {
+    if (error?.code === 11000 || error?.code === 11001) {
+      throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);
+    }
+    throw error;
   }
 }

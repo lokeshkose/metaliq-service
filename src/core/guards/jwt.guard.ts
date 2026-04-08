@@ -1,10 +1,7 @@
-import {
-  Injectable,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
+
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
@@ -13,7 +10,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
+  /* ======================================================
+   * MAIN GUARD
+   * ====================================================== */
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    /* ---------- PUBLIC ROUTE ---------- */
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -25,23 +26,47 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     const request = context.switchToHttp().getRequest();
 
-    // Validate JWT first
-    const activated = (await super.canActivate(context)) as boolean;
-    if (!activated) {
-      return false;
+    /* ---------- DEVICE VALIDATION (EARLY FAIL) ---------- */
+    const deviceIdHeader = request.headers['x-device-id'];
+
+    const deviceId =
+      typeof deviceIdHeader === 'string'
+        ? deviceIdHeader
+        : Array.isArray(deviceIdHeader)
+          ? deviceIdHeader[0]
+          : null;
+
+    if (!deviceId) {
+      throw new UnauthorizedException('Device ID missing');
     }
 
-    // Enforce device presence
-    // const deviceId = request.headers['x-device-id'];
-    // if (!deviceId) {
-    //   throw new UnauthorizedException('Device ID missing');
-    // }
+    request.deviceId = deviceId; // attach early
 
-    // // Ensure JWT and header device match
-    // if (request.user?.deviceId !== deviceId) {
-    //   throw new UnauthorizedException('Device mismatch');
-    // }
+    /* ---------- JWT VALIDATION ---------- */
+    const isActivated = (await super.canActivate(context)) as boolean;
+
+    if (!isActivated) {
+      throw new UnauthorizedException('Unauthorized');
+    }
 
     return true;
+  }
+
+  /* ======================================================
+   * HANDLE REQUEST (AFTER STRATEGY)
+   * ====================================================== */
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    if (err || !user) {
+      throw err || new UnauthorizedException(info?.message || 'Unauthorized');
+    }
+
+    const request = context.switchToHttp().getRequest();
+
+    /* ---------- FINAL DEVICE MATCH ---------- */
+    if (user.deviceId !== request.deviceId) {
+      throw new UnauthorizedException('Device mismatch');
+    }
+
+    return user;
   }
 }

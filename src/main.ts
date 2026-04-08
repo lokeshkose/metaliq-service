@@ -77,10 +77,7 @@ async function bootstrap() {
 
   /* ---------------- GLOBAL FILTERS & INTERCEPTORS ---------------- */
   app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(
-    new RequestContextInterceptor(),
-    new ResponseInterceptor(),
-  );
+  app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseInterceptor());
 
   /* ---------------- GLOBAL REQUEST ID ---------------- */
   app.use((req, res, next) => {
@@ -95,18 +92,41 @@ async function bootstrap() {
       .setTitle(SWAGGER_API_TITLE)
       .setDescription(SWAGGER_API_DESCRIPTION)
       .setVersion(SWAGGER_API_VERSION)
+
+      // ✅ Bearer Auth
       .addBearerAuth(
         {
-          type: SWAGGER_AUTH.TYPE,
-          scheme: SWAGGER_AUTH.SCHEME,
-          bearerFormat: SWAGGER_AUTH.BEARER_FORMAT,
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter JWT token',
         },
-        SWAGGER_AUTH.TOKEN,
+        'access-token',
       )
-      .addCookieAuth(SWAGGER_AUTH.TYPE)
+
+      // ✅ deviceId as header auth
+      .addApiKey(
+        {
+          type: 'apiKey',
+          name: 'x-device-id',
+          in: 'header',
+          description: 'Device ID',
+        },
+        'device-auth',
+      )
+
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
+
+    // ✅ AUTO APPLY BOTH (Bearer + deviceId)
+    document.security = [
+      {
+        'access-token': [],
+        'device-auth': [],
+      },
+    ];
+
     SwaggerModule.setup(SWAGGER_ENDPOINT, app, document, {
       useGlobalPrefix: false,
       swaggerOptions: {

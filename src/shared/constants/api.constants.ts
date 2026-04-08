@@ -7,7 +7,8 @@ export const API_METHOD = {
   GET: 'get',
   FETCH: 'fetch',
 };
-export const API_MODULE = {USER: 'user',
+export const API_MODULE = {
+  USER: 'user',
   EMPLOYEE: 'employee',
   CUSTOMER: 'customer',
   PRODUCT: 'product',
@@ -58,9 +59,14 @@ export const API_MODULE = {USER: 'user',
   SALES: 'sales',
   SALES_ITEM: 'sales-item',
   PAYMENT: 'payment',
+  PRICE: 'price',
+  INQUIRY: 'inquiry',
+  VERSION: 'version',
+  DEVICE: 'device',
 };
 
-export const API_MODULE_ENABLE_KEYS = {ADDRESS: 'ENABLE_ADDRESS_MODULE',
+export const API_MODULE_ENABLE_KEYS = {
+  ADDRESS: 'ENABLE_ADDRESS_MODULE',
   AUDIT_LOGS: 'ENABLE_AUDIT_LOGS',
   CART: 'ENABLE_CART_MODULE',
   PRODUCT_CATEGORY: 'ENABLE_CATEGORY_MODULE',
@@ -109,4 +115,8 @@ export const API_MODULE_ENABLE_KEYS = {ADDRESS: 'ENABLE_ADDRESS_MODULE',
   SALES: 'ENABLE_SALES_MODULE',
   SALES_ITEM: 'ENABLE_SALES_ITEM_MODULE',
   PAYMENT: 'ENABLE_PAYMENT_MODULE',
+  PRICE: 'ENABLE_PRICE_MODULE',
+  INQUIRY: 'ENABLE_INQUIRY_MODULE',
+  VERSION: 'ENABLE_VERSION_MODULE',
+  DEVICE: 'ENABLE_DEVICE_MODULE',
 };

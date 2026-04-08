@@ -33,26 +33,17 @@ import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationQueryDto } from './dto/notification.query.dto';
 import { NotificationDeliveryStatus } from 'src/shared/enums/notification.enums';
 import { NOTIFICATION } from './notification.constants';
-import {
-  UserDevice,
-  UserDeviceSchema,
-} from 'src/core/database/mongo/schema/device.schema';
 import { NotificationsService } from 'src/shared/notifications/notifications.service';
-import { AppLogger } from 'src/core/logger/app-logger';
-import { response } from 'express';
+import { DeviceService } from '../device/device.service';
 
 @Injectable()
 export class NotificationService extends MongoRepository<Notification> {
-  private readonly deviceModel: Model<UserDevice>;
-
   constructor(
     mongo: MongoService,
+    private readonly deviceService: DeviceService,
     private readonly pushService: NotificationsService,
   ) {
     super(mongo.getModel(Notification.name, NotificationSchema));
-
-    // Device model for push token lookup
-    this.deviceModel = mongo.getModel(UserDevice.name, UserDeviceSchema);
   }
 
   /**
@@ -77,13 +68,12 @@ export class NotificationService extends MongoRepository<Notification> {
       deliveryStatus: NotificationDeliveryStatus.PENDING,
     });
 
-
     try {
       // Fetch active devices with push tokens
-      const devices = await this.deviceModel.find({
+      const devices = await this.deviceService.find({
         userId: payload.recipientId,
         isActive: true,
-        fcmToken: { $exists: true, $ne: null },
+        fcmToken: { $exists: true, $ne: null } as any,
       });
 
       const tokens: string[] = devices
@@ -103,7 +93,7 @@ export class NotificationService extends MongoRepository<Notification> {
         deliveryStatus: NotificationDeliveryStatus.SENT,
         sentAt: new Date(),
       });
-    } catch (error) {
+    } catch (error: any) {
       await this.updateById(notification._id.toString(), {
         deliveryStatus: NotificationDeliveryStatus.FAILED,
         deliveryError: error.message,

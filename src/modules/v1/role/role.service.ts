@@ -17,12 +17,7 @@
  * - RoleId is immutable once created
  */
 
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, HttpStatus } from '@nestjs/common';
 
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -35,6 +30,7 @@ import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { Status } from 'src/shared/enums/app.enums';
 import { normalizeRoleName } from './role.uitls';
+import { RequestContextStore } from 'src/core/context/request-context';
 
 @Injectable()
 export class RoleService extends MongoRepository<Role> {
@@ -61,10 +57,7 @@ export class RoleService extends MongoRepository<Role> {
     const normalizedName = normalizeRoleName(dto.name);
 
     // Check if role already exists (including soft-deleted)
-    const existing = (await this.findOne(
-      { name: normalizedName },
-      { withDeleted: true },
-    )) as any;
+    const existing = (await this.findOne({ name: normalizedName }, { withDeleted: true })) as any;
 
     if (existing) {
       // Active role → conflict

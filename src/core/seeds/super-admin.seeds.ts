@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { EmployeeService } from "src/modules/v1/employee/employee.service";
+import { Injectable } from '@nestjs/common';
+import { EmployeeService } from 'src/modules/v1/employee/employee.service';
 
 @Injectable()
 export class SuperAdminSeeder {
@@ -9,10 +9,9 @@ export class SuperAdminSeeder {
     try {
       await this.employeeService.create({
         name: 'System Super Admin',
-        loginId: 'superadmin',
         mobile: '9999999999',
         email: 'admin@company.com',
-        password: 'ChangeMe@123',
+        password: '123456789',
         roleId: superAdminRoleId,
         permissionOverrides: {
           allow: [],

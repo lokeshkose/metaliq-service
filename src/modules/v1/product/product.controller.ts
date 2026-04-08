@@ -1,19 +1,18 @@
 /**
  * Product Controller
- * ------------------
- * Purpose : Exposes APIs for managing product master lifecycle
+ * -------------------
+ * Purpose : Exposes APIs for managing products
  * Used by : WEB / MOBILE / ADMIN PANEL
  *
  * Responsibilities:
  * - Create products
  * - Fetch products with filters & pagination
  * - Retrieve individual product details
- * - Update products
+ * - Update product
  * - Soft delete products
  *
  * Notes:
- * - Inventory quantities are handled separately
- * - Product master acts as source of truth
+ * - Products act as master reference data
  */
 
 import {
@@ -47,14 +46,12 @@ import {
 
 import { Permissions } from 'src/core/decorators/permission.decorator';
 
+import { ProductService } from './product.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { PRODUCT } from './product.constants';
-import { ProductUpdateDto } from './dto/update-product.dto';
-import { ProductCreateDto } from './dto/create-product.dto';
-import { ProductService } from './product.service';
-import { Public } from 'src/core/decorators/public.decorator';
 
-// @Public()
 @ApiTags('Product')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.PRODUCT)
 @ApiUnauthorizedResponse()
@@ -65,125 +62,69 @@ import { Public } from 'src/core/decorators/public.decorator';
   version: V1,
 })
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(private readonly service: ProductService) {}
 
   /**
    * Create Product
    * --------------
-   * Purpose : Create new product master record
-   * Used by : ADMIN FLOWS
    */
   @Permissions('PRODUCT_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create product' })
-  @ApiBody({ type: ProductCreateDto })
+  @ApiBody({ type: CreateProductDto })
   @ApiSuccessResponse(
-    {
-      productId: 'PID-001',
-      name: 'Milk 1L',
-    },
+    { productId: 'PROD-001' },
     PRODUCT.CREATED,
     HttpStatus.CREATED,
   )
-  async create(@Body() dto: ProductCreateDto) {
-    return this.productService.create(dto);
+  async create(@Body() dto: CreateProductDto) {
+    return this.service.create(dto);
   }
 
   /**
    * Get Products
    * ------------
-   * Purpose : Retrieve paginated product list
-   * Used by : PRODUCT LISTING / ADMIN SCREENS
-   *
-   * Supports:
-   * - Name search
-   * - Category filtering
-   * - Status filtering
-   * - Pagination
    */
   @Get()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get products' })
-  @ApiSuccessResponse(
-    {
-      items: [
-        {
-          productId: 'PID-001',
-          name: 'Milk 1L',
-          status: 'ACTIVE',
-        },
-      ],
-      meta: {
-        total: 10,
-        page: 1,
-        limit: 20,
-        totalPages: 1,
-      },
-    },
-    PRODUCT.FETCHED,
-  )
+  @Permissions('PRODUCT_VIEW')
   async findAll(@Query() query: ProductQueryDto) {
-    return this.productService.findAll(query);
+    return this.service.findAll(query);
   }
 
   /**
    * Get Product by ID
    * -----------------
-   * Purpose : Retrieve single product
-   * Used by : PRODUCT DETAIL VIEW
    */
+  @Permissions('PRODUCT_VIEW')
   @Get(':productId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get product by id' })
-  @ApiParam({ name: 'productId' })
-  @ApiSuccessResponse(
-    {
-      productId: 'PID-001',
-      name: 'Milk 1L',
-    },
-    PRODUCT.FETCHED,
-  )
-  @ApiNotFoundResponse()
+  @ApiParam({ name: 'productId', description: 'Product productId' })
   async findOne(@Param('productId') productId: string) {
-    return this.productService.findByProductId(productId);
+    return this.service.findByProductId(productId);
   }
 
   /**
    * Update Product
-   * --------------
-   * Purpose : Update product master data
-   * Used by : ADMIN FLOWS
+   * ---------------
    */
   @Permissions('PRODUCT_UPDATE')
   @Patch(':productId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update product' })
-  @ApiParam({ name: 'productId' })
-  @ApiBody({ type: ProductUpdateDto })
-  @ApiSuccessResponse(null, PRODUCT.UPDATED)
-  @ApiNotFoundResponse()
+  @ApiParam({ name: 'productId', description: 'Product productId' })
   async update(
     @Param('productId') productId: string,
-    @Body() dto: ProductUpdateDto,
+    @Body() dto: UpdateProductDto,
   ) {
-    return this.productService.update(productId, dto);
+    return this.service.update(productId, dto);
   }
 
   /**
    * Delete Product
-   * --------------
-   * Purpose : Soft delete product
-   * Used by : ADMIN FLOWS
+   * ---------------
    */
   @Permissions('PRODUCT_DELETE')
   @Delete(':productId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete product' })
-  @ApiParam({ name: 'productId' })
-  @ApiSuccessResponse(null, PRODUCT.DELETED)
-  @ApiNotFoundResponse()
+  @ApiParam({ name: 'productId', description: 'Product productId' })
   async delete(@Param('productId') productId: string) {
-    return this.productService.delete(productId);
+    return this.service.delete(productId);
   }
 }

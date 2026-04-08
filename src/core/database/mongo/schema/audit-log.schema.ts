@@ -8,7 +8,7 @@
  * - Entity reference and action performed
  * - Before & after state snapshots
  * - Actor (employee) information
-* - Request metadata
+ * - Request metadata
  *
  * Notes:
  * - Audit logs are immutable once created
@@ -19,19 +19,17 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
 import { AuditAction } from 'src/shared/enums/app.enums';
 
-@Schema({
-  collection: 'audit_logs',
-})
+@Schema()
 export class AuditLog extends Document {
   /* ======================================================
    * ENTITY INFO
    * ====================================================== */
 
   @Prop({ required: true, index: true })
-  entity: string; // e.g. Customer, Employee, Order
+  entity!: string; // e.g. Customer, Employee, Order
 
   @Prop({ required: true, index: true })
-  entityId: string; // customerId / employeeId / orderId
+  entityId!: string; // customerId / employeeId / orderId
 
   @Prop({
     type: String,
@@ -39,7 +37,7 @@ export class AuditLog extends Document {
     required: true,
     index: true,
   })
-  action: AuditAction;
+  action!: AuditAction;
 
   /* ======================================================
    * CHANGE SNAPSHOTS
@@ -57,16 +55,20 @@ export class AuditLog extends Document {
 
   @Prop({
     type: {
-      employeeId: { type: String, required: true },
+      userId: { type: String, required: true },
+      profileId: { type: String, required: true },
       name: { type: String },
-      role: { type: String },
+      roleId: { type: String },
+      deviceId: { type: String },
     },
     required: true,
   })
-  performedBy: {
-    employeeId: string;
+  performedBy!: {
+    userId: string;
+    profileId?: string;
     name?: string;
-    role?: string;
+    roleId?: string;
+    deviceId: string;
   };
 
   /* ======================================================

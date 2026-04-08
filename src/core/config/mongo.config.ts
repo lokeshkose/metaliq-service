@@ -7,10 +7,7 @@ import { auditPlugin } from '../database/mongo/plugins/audit-logs.plugin';
 import { EmployeeSchema } from '../database/mongo/schema/employee.schema';
 import { RoleSchema } from '../database/mongo/schema/role.schema';
 
-export const mongoConfig = (
-  uri: string,
-  logger: LoggerService,
-): MongooseModuleOptions => ({
+export const mongoConfig = (uri: string, logger: LoggerService): MongooseModuleOptions => ({
   uri,
 
   /* ==================== CONNECTION SAFETY ==================== */
@@ -27,8 +24,8 @@ export const mongoConfig = (
     /* ==================== GLOBAL PLUGINS ==================== */
     connection.plugin(timestampsPlugin);
     connection.plugin(softDeletePlugin);
-    EmployeeSchema.plugin(auditPlugin, 'employees');
-    RoleSchema.plugin(auditPlugin, 'roles');
+    EmployeeSchema.plugin(auditPlugin, { entity: 'employees', primaryKey: 'employeeId' });
+    RoleSchema.plugin(auditPlugin, { entity: 'roles', primaryKey: 'roleId' });
 
     logger.info(`MongoDB initial readyState: ${connection.readyState}`);
 

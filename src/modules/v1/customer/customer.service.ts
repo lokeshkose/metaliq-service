@@ -1,75 +1,108 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpStatus } from '@nestjs/common';
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
 import { FilterQuery } from 'src/core/database/mongo/mongo.interface';
 
-import {
-  Customer,
-  CustomerSchema,
-} from 'src/core/database/mongo/schema/customer.schema';
+import { Customer, CustomerSchema } from 'src/core/database/mongo/schema/customer.schema';
 
 import { CUSTOMER } from './customer.constants';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
+
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
+import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
+import { NormalizeType } from 'src/shared/enums/normalize.enums';
+
+import { UserService } from '../user/user.service'; // ✅ ADD
+import { UserType } from 'src/shared/enums/user.enums';
 
 @Injectable()
 export class CustomerService extends MongoRepository<Customer> {
-  constructor(mongo: MongoService) {
+  constructor(
+    mongo: MongoService,
+    private readonly userService: UserService, // ✅ INJECT
+  ) {
     super(mongo.getModel(Customer.name, CustomerSchema));
   }
 
+  /* ======================================================
+   * CREATE (WITH USER CREATION)
+   * ====================================================== */
   async create(payload: CreateCustomerDto) {
     try {
       return await this.withTransaction(async (session) => {
-        const filter: FilterQuery<Customer> = {};
+        /* ---------- NORMALIZE ---------- */
+        if (payload.name) {
+          payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
+        }
+
+        if (payload.email) {
+          payload.email = TextNormalizer.normalize(payload.email, NormalizeType.LOWER);
+        }
+
+        /* ---------- DUPLICATE CHECK ---------- */
+        const filter: FilterQuery<Customer> = {
+          $or: [{ mobile: payload.mobile }, ...(payload.email ? [{ email: payload.email }] : [])],
+        };
 
         const existing = await this.findOne(filter, {
           session,
           includeDeleted: true,
         });
 
-        if (existing && !existing.isDeleted) {
-          throw new ConflictException(CUSTOMER.DUPLICATE);
-        }
+        let customerId: string;
 
+        /* ---------- RESTORE OR CREATE ---------- */
         if (existing?.isDeleted) {
           await this.updateById(
             existing._id.toString(),
             {
               ...payload,
-              status: 'ACTIVE',
               isDeleted: false,
+              status: 'ACTIVE',
             },
             { session },
           );
 
-          return {
-            statusCode: HttpStatus.OK,
-            message: CUSTOMER.CREATED,
-            data: { customerId: existing.customerId },
-          };
+          customerId = existing.customerId;
+        } else if (existing) {
+          throw new ConflictException(CUSTOMER.DUPLICATE);
+        } else {
+          const doc = await this.save(
+            {
+              customerId: IdGenerator.generate('CUST', 8),
+              ...payload,
+            },
+            { session },
+          );
+
+          customerId = doc.customerId;
         }
 
-        const doc = await this.save(
+        /* ======================================================
+         * CREATE USER (AUTH)
+         * ====================================================== */
+        await this.userService.createUser(
           {
-            customerId: IdGenerator.generate('CUST', 8),
-            ...payload,
+            profileId: customerId,
+            mobile: payload.mobile,
+            email: payload.email,
+
+            loginId: TextNormalizer.normalize(payload.mobile, NormalizeType.LOWER),
+
+            password: payload.password || payload.mobile,
+
+            userType: UserType.CUSTOMER,
           },
-          { session },
+          session,
         );
 
         return {
           statusCode: HttpStatus.CREATED,
           message: CUSTOMER.CREATED,
-          data: doc,
+          data: { customerId },
         };
       });
     } catch (error) {
@@ -77,8 +110,11 @@ export class CustomerService extends MongoRepository<Customer> {
     }
   }
 
+  /* ======================================================
+   * FIND ALL
+   * ====================================================== */
   async findAll(query: CustomerQueryDto) {
-    const { searchText, status, page = 1, limit = 20, customerIds } = query;
+    const { searchText, status, page = 1, limit = 20 } = query;
 
     const filter: FilterQuery<Customer> = {};
 
@@ -86,11 +122,8 @@ export class CustomerService extends MongoRepository<Customer> {
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ name: regex }];
-    }
 
-    if (customerIds) {
-      filter.customerId = { $in: customerIds } as any;
+      filter.$or = [{ customerId: regex }, { name: regex }, { mobile: regex }, { email: regex }];
     }
 
     const result = await this.paginate(filter, {
@@ -108,10 +141,15 @@ export class CustomerService extends MongoRepository<Customer> {
     };
   }
 
+  /* ======================================================
+   * FIND BY ID
+   * ====================================================== */
   async findByCustomerId(customerId: string) {
     const doc = await this.findOne({ customerId }, { lean: true });
 
-    if (!doc) throw new NotFoundException(CUSTOMER.NOT_FOUND);
+    if (!doc) {
+      throw new NotFoundException(CUSTOMER.NOT_FOUND);
+    }
 
     return {
       statusCode: HttpStatus.OK,
@@ -120,15 +158,44 @@ export class CustomerService extends MongoRepository<Customer> {
     };
   }
 
+  /* ======================================================
+   * UPDATE
+   * ====================================================== */
   async update(customerId: string, dto: UpdateCustomerDto) {
     try {
       return await this.withTransaction(async (session) => {
-        const doc = await this.updateOne({ customerId }, dto, {
-          session,
-          new: true,
-        });
+        /* ---------- NORMALIZE ---------- */
+        if (dto.name) {
+          dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
+        }
 
-        if (!doc) throw new NotFoundException(CUSTOMER.NOT_FOUND);
+        if (dto.email) {
+          dto.email = TextNormalizer.normalize(dto.email, NormalizeType.LOWER);
+        }
+
+        /* ---------- DUPLICATE CHECK ---------- */
+        if (dto.mobile || dto.email) {
+          const filter: FilterQuery<Customer> = {
+            customerId: { $ne: customerId } as any,
+            $or: [
+              ...(dto.mobile ? [{ mobile: dto.mobile }] : []),
+              ...(dto.email ? [{ email: dto.email }] : []),
+            ],
+          };
+
+          const existing = await this.findOne(filter, { session });
+
+          if (existing) {
+            throw new ConflictException(CUSTOMER.DUPLICATE);
+          }
+        }
+
+        /* ---------- UPDATE ---------- */
+        const doc = await this.updateOne({ customerId }, dto, { session, new: true });
+
+        if (!doc) {
+          throw new NotFoundException(CUSTOMER.NOT_FOUND);
+        }
 
         return {
           statusCode: HttpStatus.OK,
@@ -141,10 +208,15 @@ export class CustomerService extends MongoRepository<Customer> {
     }
   }
 
+  /* ======================================================
+   * DELETE (SOFT)
+   * ====================================================== */
   async delete(customerId: string) {
     const existing = await this.findOne({ customerId });
 
-    if (!existing) throw new NotFoundException(CUSTOMER.NOT_FOUND);
+    if (!existing) {
+      throw new NotFoundException(CUSTOMER.NOT_FOUND);
+    }
 
     await this.softDelete({ customerId });
 
@@ -155,6 +227,9 @@ export class CustomerService extends MongoRepository<Customer> {
     };
   }
 
+  /* ======================================================
+   * HANDLE DUPLICATE ERROR
+   * ====================================================== */
   private handleDuplicateError(error: any): never {
     if (error?.code === 11000 || error?.code === 11001) {
       throw new ConflictException(CUSTOMER.DUPLICATE);

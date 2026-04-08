@@ -1,18 +1,18 @@
 /**
- * Product Category Controller
+ * ProductCategory Controller
  * ---------------------------
- * Purpose : Exposes APIs for managing product categories
+ * Purpose : Exposes APIs for managing product-categorys
  * Used by : WEB / MOBILE / ADMIN PANEL
  *
  * Responsibilities:
- * - Create categories
- * - Fetch categories with filters & pagination
- * - Retrieve individual category details
- * - Update categories
- * - Soft delete categories
+ * - Create product-categorys
+ * - Fetch product-categorys with filters & pagination
+ * - Retrieve individual product-category details
+ * - Update product-category
+ * - Soft delete product-categorys
  *
  * Notes:
- * - Categories are referenced by product master
+ * - ProductCategorys act as master reference data
  */
 
 import {
@@ -38,22 +38,17 @@ import {
   ApiUnprocessableEntityResponse,
 } from 'src/core/swagger/api-error.response.swagger';
 
-import {
-  API_MODULE,
-  API_MODULE_ENABLE_KEYS,
-  V1,
-} from 'src/shared/constants/api.constants';
+import { API_MODULE, API_MODULE_ENABLE_KEYS, V1 } from 'src/shared/constants/api.constants';
 
 import { Permissions } from 'src/core/decorators/permission.decorator';
 
 import { ProductCategoryService } from './product-category.service';
+import { CreateProductCategoryDto } from './dto/create-product-category.dto';
+import { UpdateProductCategoryDto } from './dto/update-product-category.dto';
 import { ProductCategoryQueryDto } from './dto/product-category-query.dto';
-import { ProductCategoryUpdateDto } from './dto/update-product-category.dto';
 import { PRODUCT_CATEGORY } from './product-category.constants';
-import { ProductCategoryCreateDto } from './dto/create-product-category.dto';
-import { Public } from 'src/core/decorators/public.decorator';
 
-@ApiTags('Product Category')
+@ApiTags('Product-category')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.PRODUCT_CATEGORY)
 @ApiUnauthorizedResponse()
 @ApiUnprocessableEntityResponse()
@@ -62,125 +57,62 @@ import { Public } from 'src/core/decorators/public.decorator';
   path: API_MODULE.PRODUCT_CATEGORY,
   version: V1,
 })
-@Public()
 export class ProductCategoryController {
   constructor(private readonly service: ProductCategoryService) {}
 
   /**
-   * Create Product Category
+   * Create ProductCategory
    * ----------------------
-   * Purpose : Create new product category
-   * Used by : ADMIN FLOWS
    */
   @Permissions('PRODUCT_CATEGORY_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create product category' })
-  @ApiBody({ type: ProductCategoryCreateDto })
-  @ApiSuccessResponse(
-    {
-      categoryId: 'CAT-001',
-      name: 'Dairy Products',
-    },
-    PRODUCT_CATEGORY.CREATED,
-    HttpStatus.CREATED,
-  )
-  async create(@Body() dto: ProductCategoryCreateDto) {
+  @ApiOperation({ summary: 'Create product-category' })
+  @ApiBody({ type: CreateProductCategoryDto })
+  @ApiSuccessResponse({ categoryId: 'PROD-001' }, PRODUCT_CATEGORY.CREATED, HttpStatus.CREATED)
+  async create(@Body() dto: CreateProductCategoryDto) {
     return this.service.create(dto);
   }
 
   /**
-   * Get Product Categories
-   * ---------------------
-   * Purpose : Retrieve paginated category list
-   * Used by : CATEGORY LISTING / ADMIN SCREENS
-   *
-   * Supports:
-   * - Name search
-   * - Status filtering
-   * - Pagination
+   * Get ProductCategorys
+   * --------------------
    */
   @Get()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get product categories' })
-  @ApiSuccessResponse(
-    {
-      items: [
-        {
-          categoryId: 'CAT-001',
-          name: 'Dairy Products',
-          status: 'ACTIVE',
-        },
-      ],
-      meta: {
-        total: 5,
-        page: 1,
-        limit: 20,
-        totalPages: 1,
-      },
-    },
-    PRODUCT_CATEGORY.FETCHED,
-  )
+  @Permissions('PRODUCT_CATEGORY_VIEW')
   async findAll(@Query() query: ProductCategoryQueryDto) {
     return this.service.findAll(query);
   }
 
   /**
-   * Get Product Category by ID
+   * Get ProductCategory by ID
    * -------------------------
-   * Purpose : Retrieve single category
-   * Used by : CATEGORY DETAIL VIEW
    */
+  @Permissions('PRODUCT_CATEGORY_VIEW')
   @Get(':categoryId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get product category by id' })
-  @ApiParam({ name: 'categoryId' })
-  @ApiSuccessResponse(
-    {
-      categoryId: 'CAT-001',
-      name: 'Dairy Products',
-    },
-    PRODUCT_CATEGORY.FETCHED,
-  )
-  @ApiNotFoundResponse()
+  @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
   async findOne(@Param('categoryId') categoryId: string) {
     return this.service.findByCategoryId(categoryId);
   }
 
   /**
-   * Update Product Category
-   * ----------------------
-   * Purpose : Update category master data
-   * Used by : ADMIN FLOWS
+   * Update ProductCategory
+   * -----------------------
    */
   @Permissions('PRODUCT_CATEGORY_UPDATE')
   @Patch(':categoryId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update product category' })
-  @ApiParam({ name: 'categoryId' })
-  @ApiBody({ type: ProductCategoryUpdateDto })
-  @ApiSuccessResponse(null, PRODUCT_CATEGORY.UPDATED)
-  @ApiNotFoundResponse()
-  async update(
-    @Param('categoryId') categoryId: string,
-    @Body() dto: ProductCategoryUpdateDto,
-  ) {
+  @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
+  async update(@Param('categoryId') categoryId: string, @Body() dto: UpdateProductCategoryDto) {
     return this.service.update(categoryId, dto);
   }
 
   /**
-   * Delete Product Category
-   * ----------------------
-   * Purpose : Soft delete product category
-   * Used by : ADMIN FLOWS
+   * Delete ProductCategory
+   * -----------------------
    */
   @Permissions('PRODUCT_CATEGORY_DELETE')
   @Delete(':categoryId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete product category' })
-  @ApiParam({ name: 'categoryId' })
-  @ApiSuccessResponse(null, PRODUCT_CATEGORY.DELETED)
-  @ApiNotFoundResponse()
+  @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
   async delete(@Param('categoryId') categoryId: string) {
     return this.service.delete(categoryId);
   }
