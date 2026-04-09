@@ -21,14 +21,18 @@ export class LoggerService {
     this.pino.warn(meta ?? {}, message);
   }
 
-  error(
-    message: string,
-    error?: unknown,
-    meta?: Record<string, any>,
-  ) {
+  error(message: string, error?: unknown, meta?: Record<string, any>) {
     this.pino.error(
       {
-        err: error instanceof Error ? error : undefined,
+        // 🔥 Always include error properly
+        err:
+          error instanceof Error
+            ? {
+                type: error.constructor.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
         ...meta,
       },
       message,

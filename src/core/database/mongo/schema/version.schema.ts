@@ -36,7 +36,7 @@ export class Version {
    * ====================================================== */
 
   @Prop({ type: String, default: '' })
-  whatsNew?: string;
+  features?: string;
 
   /* ======================================================
    * UPDATE CONTROL

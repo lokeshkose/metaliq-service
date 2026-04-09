@@ -18,12 +18,12 @@ export class RequestContextInterceptor implements NestInterceptor {
           roleId: user?.roleId,
           roleName: user?.roleName,
           mobile: user?.mobile,
-          permissions: user.permissions,
-          userType: user.userType,
-          isActive: user.isActive,
-          roleStatus: user.roleStatus,
+          permissions: user?.permissions,
+          userType: user?.userType,
+          isActive: user?.isActive,
+          roleStatus: user?.roleStatus,
           deviceId: user?.deviceId,
-          sessionId: user.sessionId,
+          sessionId: user?.sessionId,
         });
 
         next.handle().subscribe({
