@@ -85,6 +85,10 @@ export class InquiryService extends MongoRepository<Inquiry> {
 
     if (status) filter.status = status;
 
+    if (query.customerId) {
+      filter.customerId = query.customerId;
+    }
+
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
 
