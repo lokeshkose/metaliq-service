@@ -73,6 +73,9 @@ export class Inquiry {
   @Prop({ default: 0, type: Number })
   offeredQuantity!: number;
 
+  @Prop({ type: Number, required: true })
+  estimatedValue!: number;
+
   @Prop({ type: String })
   remark!: string;
 

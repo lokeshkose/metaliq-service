@@ -42,6 +42,11 @@ export class CreateInquiryDto {
   @ApiPropertyOptional({ type: Number })
   @IsNotEmpty()
   @IsNumber()
+  estimatedValue?: number;
+
+  @ApiPropertyOptional({ type: Number })
+  @IsNotEmpty()
+  @IsNumber()
   customerPrice?: number;
 
   @ApiPropertyOptional({ type: Number })
