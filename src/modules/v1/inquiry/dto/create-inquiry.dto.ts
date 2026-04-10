@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsEnum } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsEnum, IsDate } from 'class-validator';
 import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 export class CreateInquiryDto {
@@ -9,37 +10,37 @@ export class CreateInquiryDto {
    * DTO for creating Inquiry
    */
   @ApiPropertyOptional({ type: String })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   productId?: string;
 
   @ApiPropertyOptional({ type: String })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   productName?: string;
 
   @ApiPropertyOptional({ type: String })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   customerId?: string;
 
   @ApiPropertyOptional({ type: String })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   customerName?: string;
 
   @ApiPropertyOptional({ type: Number })
-  @IsOptional()
+  @IsNotEmpty()
   @IsNumber()
   basePrice?: number;
 
   @ApiPropertyOptional({ type: Number })
-  @IsOptional()
+  @IsNotEmpty()
   @IsNumber()
   customerPrice?: number;
 
   @ApiPropertyOptional({ type: Number })
-  @IsOptional()
+  @IsNotEmpty()
   @IsNumber()
   customerQuantity?: number;
 
@@ -48,8 +49,19 @@ export class CreateInquiryDto {
   @IsString()
   remark?: string;
 
+  // @ApiPropertyOptional({ type: String })
+  // @IsOptional()
+  // @IsString()
+  // comments?: string;
+
   @ApiPropertyOptional({ type: String })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  comments?: string;
+  deliveryCity?: string;
+
+  @ApiProperty({ type: Date })
+  @IsNotEmpty()
+  @Type(() => Date)
+  @IsDate()
+  deliveryRequiredBy!: Date;
 }

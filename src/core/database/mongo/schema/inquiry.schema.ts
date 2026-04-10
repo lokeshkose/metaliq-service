@@ -79,8 +79,14 @@ export class Inquiry {
   @Prop({ type: String })
   comments!: string;
 
-  @Prop({ type: String })
+  @Prop({ type: String, required: true })
   purpose!: string;
+
+  @Prop({ type: Date, required: true })
+  deliveryRequiredBy!: Date;
+
+  @Prop({ type: String, required: true })
+  deliveryCity!: string;
 
   /* ======================================================
    * STATUS
