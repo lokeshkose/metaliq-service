@@ -41,27 +41,27 @@ export class PriceService extends MongoRepository<Price> {
           includeDeleted: true,
         });
 
-        if (existing && !existing.isDeleted) {
-          throw new ConflictException(PRICE.DUPLICATE);
-        }
+        // if (existing && !existing.isDeleted) {
+        //   throw new ConflictException(PRICE.DUPLICATE);
+        // }
 
-        if (existing?.isDeleted) {
-          await this.updateById(
-            existing._id.toString(),
-            {
-              ...payload,
-              status: 'ACTIVE',
-              isDeleted: false,
-            },
-            { session },
-          );
+        // if (existing?.isDeleted) {
+        //   await this.updateById(
+        //     existing._id.toString(),
+        //     {
+        //       ...payload,
+        //       status: 'ACTIVE',
+        //       isDeleted: false,
+        //     },
+        //     { session },
+        //   );
 
-          return {
-            statusCode: HttpStatus.OK,
-            message: PRICE.CREATED,
-            data: { priceId: existing.priceId },
-          };
-        }
+        //   return {
+        //     statusCode: HttpStatus.OK,
+        //     message: PRICE.CREATED,
+        //     data: { priceId: existing.priceId },
+        //   };
+        // }
 
         const doc = await this.save(
           {
