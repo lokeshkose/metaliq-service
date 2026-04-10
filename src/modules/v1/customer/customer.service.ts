@@ -39,8 +39,12 @@ export class CustomerService extends MongoRepository<Customer> {
     try {
       return await this.withTransaction(async (session) => {
         /* ---------- NORMALIZE ---------- */
-        if (payload.name) {
-          payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
+        if (payload.firstName) {
+          payload.firstName = TextNormalizer.normalize(payload.firstName, NormalizeType.TITLE);
+        }
+
+        if (payload.lastName) {
+          payload.lastName = TextNormalizer.normalize(payload.lastName, NormalizeType.TITLE);
         }
 
         if (payload.email) {
@@ -78,7 +82,7 @@ export class CustomerService extends MongoRepository<Customer> {
           const doc = await this.save(
             {
               customerId: IdGenerator.generate('CUST', 8),
-              ...payload,
+              ...payload, // ✅ firstName & lastName saved directly
             },
             { session },
           );
@@ -86,19 +90,14 @@ export class CustomerService extends MongoRepository<Customer> {
           customerId = doc.customerId;
         }
 
-        /* ======================================================
-         * CREATE USER (AUTH)
-         * ====================================================== */
+        /* ---------- CREATE USER ---------- */
         await this.userService.createUser(
           {
             profileId: customerId,
             mobile: payload.mobile,
             email: payload.email,
-
             loginId: TextNormalizer.normalize(payload.mobile, NormalizeType.LOWER),
-
             password: payload.password || payload.mobile,
-
             userType: UserType.CUSTOMER,
           },
           session,
@@ -114,7 +113,6 @@ export class CustomerService extends MongoRepository<Customer> {
       this.handleDuplicateError(error);
     }
   }
-
   /* ======================================================
    * FIND ALL
    * ====================================================== */
@@ -170,33 +168,19 @@ export class CustomerService extends MongoRepository<Customer> {
     try {
       return await this.withTransaction(async (session) => {
         /* ---------- NORMALIZE ---------- */
-        if (dto.name) {
-          dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
+        if (dto.firstName) {
+          dto.firstName = TextNormalizer.normalize(dto.firstName, NormalizeType.TITLE);
         }
 
-        if (dto.email) {
-          dto.email = TextNormalizer.normalize(dto.email, NormalizeType.LOWER);
-        }
-
-        /* ---------- DUPLICATE CHECK ---------- */
-        if (dto.mobile || dto.email) {
-          const filter: FilterQuery<Customer> = {
-            customerId: { $ne: customerId } as any,
-            $or: [
-              ...(dto.mobile ? [{ mobile: dto.mobile }] : []),
-              ...(dto.email ? [{ email: dto.email }] : []),
-            ],
-          };
-
-          const existing = await this.findOne(filter, { session });
-
-          if (existing) {
-            throw new ConflictException(CUSTOMER.DUPLICATE);
-          }
+        if (dto.lastName) {
+          dto.lastName = TextNormalizer.normalize(dto.lastName, NormalizeType.TITLE);
         }
 
         /* ---------- UPDATE ---------- */
-        const doc = await this.updateOne({ customerId }, dto, { session, new: true });
+        const doc = await this.updateOne({ customerId }, dto, {
+          session,
+          new: true,
+        });
 
         if (!doc) {
           throw new NotFoundException(CUSTOMER.NOT_FOUND);

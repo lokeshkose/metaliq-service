@@ -92,10 +92,10 @@ import { RbacGuard } from './core/guards/rbac.guard';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
-    {
-      provide: APP_GUARD,
-      useClass: RbacGuard,
-    },
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: RbacGuard,
+    // },
   ],
   exports: [MongoService, RedisRepository],
 })

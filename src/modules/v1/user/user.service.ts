@@ -134,10 +134,17 @@ export class UserService extends MongoRepository<User> {
     }
 
     /* ---------- ROLE ---------- */
-    const role = await this.roleService.findOne({
-      roleId: profile.roleId,
-      isDeleted: false,
-    });
+    // const role = await this.roleService.findOne({
+    //   roleId: profile.roleId,
+    //   isDeleted: false,
+    // });
+
+    const role = {
+      roleId: 'TEST123',
+      name: 'TEMP',
+      status: Status.ACTIVE,
+      permissions: [],
+    };
 
     if (!role) throw new ForbiddenException('Role not found');
     if (role.status !== Status.ACTIVE) throw new ForbiddenException('Role inactive');

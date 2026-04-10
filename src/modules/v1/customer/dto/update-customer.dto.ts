@@ -6,4 +6,6 @@ import { CreateCustomerDto } from './create-customer.dto';
  * =================
  * DTO for updating Customer
  */
-export class UpdateCustomerDto extends PartialType(OmitType(CreateCustomerDto, [] as const)) {}
+export class UpdateCustomerDto extends PartialType(
+  OmitType(CreateCustomerDto, ['mobile', 'email', 'password'] as const),
+) {}
