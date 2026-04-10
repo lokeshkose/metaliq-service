@@ -123,6 +123,10 @@ export class CustomerService extends MongoRepository<Customer> {
 
     if (status) filter.status = status;
 
+    if (query.customerId) {
+      filter.customerId = query.customerId;
+    }
+
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
 

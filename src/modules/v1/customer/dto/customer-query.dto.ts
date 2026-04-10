@@ -20,7 +20,7 @@ export class CustomerQueryDto extends PaginationDto {
   @ApiPropertyOptional({ type: String })
   @IsOptional()
   @IsString()
-  roleId?: string;
+  customerId?: string;
 
   @ApiPropertyOptional({ type: String })
   @IsOptional()
