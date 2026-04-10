@@ -145,7 +145,7 @@ export class ProductService extends MongoRepository<Product> {
        * ========================= */
       {
         $lookup: {
-          from: 'product_category',
+          from: 'product_categories',
           localField: 'categoryId',
           foreignField: 'categoryId',
           as: 'category',
@@ -163,7 +163,7 @@ export class ProductService extends MongoRepository<Product> {
        * ========================= */
       {
         $lookup: {
-          from: 'product_category',
+          from: 'product_categories',
           localField: 'category.parentId',
           foreignField: 'categoryId',
           as: 'parentCategory',
