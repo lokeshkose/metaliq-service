@@ -2,22 +2,23 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { PermissionsSeeder } from './permission.seeds';
-import {
-  Permission,
-  PermissionSchema,
-} from '../database/mongo/schema/permission.schema';
+import { Permission, PermissionSchema } from '../database/mongo/schema/permission.schema';
 import { Role, RoleSchema } from '../database/mongo/schema/role.schema';
 import { SuperAdminSeeder } from './super-admin.seeds';
 import { RoleSeeder } from './role.seed';
-import {
-  Employee,
-  EmployeeSchema,
-} from '../database/mongo/schema/employee.schema';
+import { Employee, EmployeeSchema } from '../database/mongo/schema/employee.schema';
 import { SeederRunner } from './seed.runner';
 import { EmployeeService } from 'src/modules/v1/employee/employee.service';
 import { RoleService } from 'src/modules/v1/role/role.service';
 import { RoleModule } from 'src/modules/v1/role/role.module';
 import { EmployeeModule } from 'src/modules/v1/employee/employee.module';
+import { ProductSeeder } from './product.seeds';
+import { Product, ProductSchema } from '../database/mongo/schema/product.schema';
+import {
+  ProductCategory,
+  ProductCategorySchema,
+} from '../database/mongo/schema/product-category.schema';
+import { Price, PriceSchema } from '../database/mongo/schema/price.schema';
 
 @Module({
   imports: [
@@ -28,11 +29,14 @@ import { EmployeeModule } from 'src/modules/v1/employee/employee.module';
         name: Employee.name,
         schema: EmployeeSchema,
       },
+      { name: Product.name, schema: ProductSchema },
+      { name: ProductCategory.name, schema: ProductCategorySchema },
+      { name: Price.name, schema: PriceSchema },
     ]),
     RoleModule,
     EmployeeModule,
   ],
-  providers: [PermissionsSeeder, SuperAdminSeeder, RoleSeeder, SeederRunner],
+  providers: [PermissionsSeeder, SuperAdminSeeder, RoleSeeder, SeederRunner, ProductSeeder],
   exports: [SeederRunner],
 })
 export class SeedsModule {}

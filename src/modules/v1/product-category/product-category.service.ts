@@ -61,7 +61,7 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
 
         const doc = await this.save(
           {
-            categoryId: IdGenerator.generate('PROD', 8),
+            categoryId: IdGenerator.generate('CAT', 8),
             ...payload,
           },
           { session },
