@@ -14,6 +14,6 @@ export class UpdateInquiryDto extends PartialType(
     'customerQuantity',
     'productId',
     'productName',
-    'comments',
+    'remark',
   ] as const),
 ) {}
