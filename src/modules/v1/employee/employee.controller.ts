@@ -93,17 +93,36 @@ export class EmployeeController {
   @ApiOperation({ summary: 'Get employee KPI (inquiry, customer, product stats)' })
   @ApiSuccessResponse(
     {
-      totalInquiries: 25,
-      pendingInquiryCount: 10,
-      customerCount: 50,
-      productCount: 100,
-      categoryCount: 12,
-      statusCounts: {
-        PENDING: 10,
-        CLOSED: 5,
-        REJECTED: 2,
-        RESPONDED: 7,
-        CANCELLED: 1,
+      weekRange: {
+        start: '2026-04-07T00:00:00.000Z',
+        end: '2026-04-13T23:59:59.999Z',
+      },
+      overall: {
+        totalInquiries: 25,
+        pendingInquiryCount: 10,
+        customerCount: 50,
+        productCount: 100,
+        categoryCount: 12,
+        statusCounts: {
+          PENDING: 10,
+          CLOSED: 5,
+          REJECTED: 2,
+          RESPONDED: 7,
+          CANCELLED: 1,
+        },
+      },
+      thisWeek: {
+        totalInquiries: 8,
+        pendingInquiryCount: 3,
+        customerCount: 6,
+        productCount: 4,
+        statusCounts: {
+          PENDING: 3,
+          CLOSED: 2,
+          REJECTED: 0,
+          RESPONDED: 2,
+          CANCELLED: 1,
+        },
       },
     },
     'Employee KPI fetched successfully',

@@ -93,7 +93,7 @@ export class ProductService extends MongoRepository<Product> {
       { $match: filter },
 
       /* =========================
-       * PRICE LOOKUP
+       * PRICE LOOKUP (LAST 2)
        * ========================= */
       {
         $lookup: {
@@ -105,16 +105,38 @@ export class ProductService extends MongoRepository<Product> {
                 $expr: { $eq: ['$productId', '$$productId'] },
               },
             },
-            { $sort: { effectiveAt: -1 } },
-            { $limit: 1 },
+            { $sort: { effectiveAt: -1, _id: -1 } }, // safer sort
+            { $limit: 2 },
           ],
           as: 'priceData',
         },
       },
 
+      /* =========================
+       * PRICE CALCULATION
+       * ========================= */
       {
         $addFields: {
-          price: { $arrayElemAt: ['$priceData.price', 0] },
+          currentPrice: {
+            $ifNull: [{ $arrayElemAt: ['$priceData.price', 0] }, 0],
+          },
+          previousPrice: {
+            $arrayElemAt: ['$priceData.price', 1],
+          },
+        },
+      },
+      {
+        $addFields: {
+          priceDifference: {
+            $cond: [
+              { $ne: ['$previousPrice', null] },
+              { $subtract: ['$currentPrice', '$previousPrice'] },
+              null,
+            ],
+          },
+          hasPrice: {
+            $gt: [{ $size: '$priceData' }, 0],
+          },
         },
       },
 
@@ -167,6 +189,7 @@ export class ProductService extends MongoRepository<Product> {
         $project: {
           priceData: 0,
           parentCategory: 0,
+          hasPrice: 0,
         },
       },
 

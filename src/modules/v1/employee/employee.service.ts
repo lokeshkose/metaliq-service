@@ -240,37 +240,71 @@ export class EmployeeService extends MongoRepository<Employee> {
   async getEmployeeKpi(query: { employeeId?: string }) {
     const { employeeId } = query;
 
-    const inquiryFilter: any = {
+    /* ======================================================
+     * WEEK RANGE
+     * ====================================================== */
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() + diffToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    /* ======================================================
+     * BASE FILTERS
+     * ====================================================== */
+
+    const baseInquiryFilter: any = {
       isDeleted: { $ne: true },
     };
 
     if (employeeId) {
-      inquiryFilter.employeeId = employeeId;
+      baseInquiryFilter.employeeId = employeeId;
     }
 
+    const weekInquiryFilter = {
+      ...baseInquiryFilter,
+      createdAt: { $gte: weekStart, $lte: weekEnd },
+    };
+
     /* ======================================================
-     * PARALLEL EXECUTION (FAST 🚀)
+     * PARALLEL EXECUTION
      * ====================================================== */
+
     const [
+      // OVERALL
       totalInquiries,
       pendingInquiryCount,
-      statusCountsRaw,
+      overallStatusRaw,
+
+      // THIS WEEK
+      weeklyInquiries,
+      weeklyPending,
+      weeklyStatusRaw,
+
+      // COMMON
       customerCount,
+      weeklyCustomerCount,
       productCount,
+      weeklyProductCount,
       categoryCount,
     ] = await Promise.all([
-      // Total inquiries
-      this.inquiryService.countDocuments(inquiryFilter),
+      /* ================= OVERALL ================= */
 
-      // ✅ Pending inquiries (FIXED)
+      this.inquiryService.countDocuments(baseInquiryFilter),
+
       this.inquiryService.countDocuments({
-        ...inquiryFilter,
+        ...baseInquiryFilter,
         status: InquiryStatus.PENDING,
       }),
 
-      // Status-wise count
       this.inquiryService.aggregate([
-        { $match: inquiryFilter },
+        { $match: baseInquiryFilter },
         {
           $group: {
             _id: '$status',
@@ -279,44 +313,95 @@ export class EmployeeService extends MongoRepository<Employee> {
         },
       ]),
 
-      // Total customers
+      /* ================= WEEK ================= */
+
+      this.inquiryService.countDocuments(weekInquiryFilter),
+
+      this.inquiryService.countDocuments({
+        ...weekInquiryFilter,
+        status: InquiryStatus.PENDING,
+      }),
+
+      this.inquiryService.aggregate([
+        { $match: weekInquiryFilter },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+
+      /* ================= OTHERS ================= */
+
       this.customerService.countDocuments({ isDeleted: { $ne: true } }),
 
-      // Total products
+      this.customerService.countDocuments({
+        isDeleted: { $ne: true },
+        createdAt: { $gte: weekStart, $lte: weekEnd },
+      }),
+
       this.productService.countDocuments({ isDeleted: { $ne: true } }),
 
-      // ✅ Add soft delete filter (FIXED)
-      this.productCategoryService.countDocuments({ isDeleted: { $ne: true } }),
+      this.productService.countDocuments({
+        isDeleted: { $ne: true },
+        createdAt: { $gte: weekStart, $lte: weekEnd },
+      }),
+
+      this.productCategoryService.countDocuments({
+        isDeleted: { $ne: true },
+      }),
     ]);
 
     /* ======================================================
-     * FORMAT STATUS COUNTS (WITH DEFAULTS)
+     * STATUS FORMATTER (REUSABLE)
      * ====================================================== */
-    const statusCounts: Record<InquiryStatus, number> = {
-      [InquiryStatus.PENDING]: 0,
-      [InquiryStatus.CLOSED]: 0,
-      [InquiryStatus.REJECTED]: 0,
-      [InquiryStatus.RESPONDED]: 0,
-      [InquiryStatus.CANCELLED]: 0,
-    };
 
-    statusCountsRaw.forEach((item) => {
-      statusCounts[item._id] = item.count;
-    });
+    const formatStatus = (raw) => {
+      const base: Record<InquiryStatus, number> = {
+        [InquiryStatus.PENDING]: 0,
+        [InquiryStatus.CLOSED]: 0,
+        [InquiryStatus.REJECTED]: 0,
+        [InquiryStatus.RESPONDED]: 0,
+        [InquiryStatus.CANCELLED]: 0,
+      };
+
+      raw.forEach((item) => {
+        base[item._id] = item.count;
+      });
+
+      return base;
+    };
 
     /* ======================================================
      * RESPONSE
      * ====================================================== */
+
     return {
       statusCode: 200,
       message: EMPLOYEE.KPI_FETCHED,
       data: {
-        totalInquiries,
-        pendingInquiryCount,
-        customerCount,
-        productCount,
-        categoryCount,
-        statusCounts,
+        weekRange: {
+          start: weekStart,
+          end: weekEnd,
+        },
+
+        overall: {
+          totalInquiries,
+          pendingInquiryCount,
+          customerCount,
+          productCount,
+          categoryCount,
+          statusCounts: formatStatus(overallStatusRaw),
+        },
+
+        thisWeek: {
+          totalInquiries: weeklyInquiries,
+          pendingInquiryCount: weeklyPending,
+          customerCount: weeklyCustomerCount,
+          productCount: weeklyProductCount,
+          statusCounts: formatStatus(weeklyStatusRaw),
+        },
       },
     };
   }
