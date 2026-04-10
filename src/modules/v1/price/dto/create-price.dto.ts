@@ -1,7 +1,8 @@
 import { PriceType } from 'src/shared/enums/price.enums';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePriceDto {
   /**
@@ -27,4 +28,10 @@ export class CreatePriceDto {
   @IsOptional()
   @IsEnum(PriceType)
   type?: PriceType;
+
+  @ApiProperty({ type: Date })
+  @IsNotEmpty()
+  @Type(() => Date)
+  @IsDate()
+  effectiveAt!: Date;
 }

@@ -36,10 +36,14 @@ export class PriceService extends MongoRepository<Price> {
       return await this.withTransaction(async (session) => {
         const filter: FilterQuery<Price> = {};
 
-        const existing = await this.findOne(filter, {
-          session,
-          includeDeleted: true,
-        });
+        if (payload.effectiveAt) {
+          payload.effectiveAt = new Date();
+        }
+
+        // const existing = await this.findOne(filter, {
+        //   session,
+        //   includeDeleted: true,
+        // });
 
         // if (existing && !existing.isDeleted) {
         //   throw new ConflictException(PRICE.DUPLICATE);

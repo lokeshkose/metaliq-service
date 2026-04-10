@@ -8,15 +8,18 @@ import { PaginationDto } from 'src/shared/dto/pagination.dto';
  * ProductQueryDto
  * =================
  * Data Transfer Object for querying Product records
- * 
+ *
  * All fields are optional - supports partial matching and range queries
  * Extends PaginationDto for pagination support
  */
 export class ProductQueryDto extends PaginationDto {
-  @ApiPropertyOptional({ description: "Search by name, code, or identifier (supports partial matching)", example: "search term" })
+  @ApiPropertyOptional({
+    description: 'Search by name, code, or identifier (supports partial matching)',
+    example: 'search term',
+  })
   @IsOptional()
   @IsString()
-  @MinLength(2)
+  // @MinLength(2)
   @MaxLength(100)
   searchText?: string;
 
@@ -40,8 +43,7 @@ export class ProductQueryDto extends PaginationDto {
    * ------
    * Filter by record status (e.g., ACTIVE, INACTIVE, PENDING, DELETED)
    */
-  @ApiPropertyOptional({ description: "Filter by status", example: "ACTIVE" })
+  @ApiPropertyOptional({ description: 'Filter by status', example: 'ACTIVE' })
   @IsOptional()
   status?: ProductStatus;
-
 }
