@@ -29,6 +29,11 @@ export class CreateInquiryDto {
   @IsString()
   customerName?: string;
 
+  @ApiPropertyOptional({ type: String })
+  @IsNotEmpty()
+  @IsString()
+  purpose?: string;
+
   @ApiPropertyOptional({ type: Number })
   @IsNotEmpty()
   @IsNumber()
