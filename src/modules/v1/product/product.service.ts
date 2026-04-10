@@ -213,10 +213,73 @@ export class ProductService extends MongoRepository<Product> {
   }
 
   async findByProductId(productId: string) {
+    // const result = await this.model.aggregate([
+    //   { $match: { productId } },
+
+    //   /* PRICE */
+    //   {
+    //     $lookup: {
+    //       from: 'price_master',
+    //       let: { productId: '$productId' },
+    //       pipeline: [
+    //         {
+    //           $match: {
+    //             $expr: { $eq: ['$productId', '$$productId'] },
+    //           },
+    //         },
+    //         { $sort: { effectiveAt: -1 } },
+    //         { $limit: 1 },
+    //       ],
+    //       as: 'priceData',
+    //     },
+    //   },
+    //   {
+    //     $addFields: {
+    //       price: { $arrayElemAt: ['$priceData.price', 0] },
+    //     },
+    //   },
+
+    //   /* CATEGORY */
+    //   {
+    //     $lookup: {
+    //       from: 'product_category',
+    //       localField: 'categoryId',
+    //       foreignField: 'categoryId',
+    //       as: 'category',
+    //     },
+    //   },
+    //   { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+
+    //   /* PARENT CATEGORY */
+    //   {
+    //     $lookup: {
+    //       from: 'product_category',
+    //       localField: 'category.parentId',
+    //       foreignField: 'categoryId',
+    //       as: 'parentCategory',
+    //     },
+    //   },
+    //   { $unwind: { path: '$parentCategory', preserveNullAndEmptyArrays: true } },
+
+    //   {
+    //     $addFields: {
+    //       'category.parent': '$parentCategory',
+    //     },
+    //   },
+    //   {
+    //     $project: {
+    //       priceData: 0,
+    //       parentCategory: 0,
+    //     },
+    //   },
+    // ]);
+
     const result = await this.model.aggregate([
       { $match: { productId } },
 
-      /* PRICE */
+      /* =========================
+       * PRICE LOOKUP (LAST 2)
+       * ========================= */
       {
         $lookup: {
           from: 'price_master',
@@ -227,49 +290,91 @@ export class ProductService extends MongoRepository<Product> {
                 $expr: { $eq: ['$productId', '$$productId'] },
               },
             },
-            { $sort: { effectiveAt: -1 } },
-            { $limit: 1 },
+            { $sort: { effectiveAt: -1, _id: -1 } }, // safer sort
+            { $limit: 2 },
           ],
           as: 'priceData',
         },
       },
+
+      /* =========================
+       * PRICE CALCULATION
+       * ========================= */
       {
         $addFields: {
-          price: { $arrayElemAt: ['$priceData.price', 0] },
+          currentPrice: {
+            $ifNull: [{ $arrayElemAt: ['$priceData.price', 0] }, 0],
+          },
+          previousPrice: {
+            $arrayElemAt: ['$priceData.price', 1],
+          },
+        },
+      },
+      {
+        $addFields: {
+          priceDifference: {
+            $cond: [
+              { $ne: ['$previousPrice', null] },
+              { $subtract: ['$currentPrice', '$previousPrice'] },
+              null,
+            ],
+          },
+          hasPrice: {
+            $gt: [{ $size: '$priceData' }, 0],
+          },
         },
       },
 
-      /* CATEGORY */
+      /* =========================
+       * CATEGORY LOOKUP
+       * ========================= */
       {
         $lookup: {
-          from: 'product_category',
+          from: 'product_categories',
           localField: 'categoryId',
           foreignField: 'categoryId',
           as: 'category',
         },
       },
-      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: {
+          path: '$category',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
-      /* PARENT CATEGORY */
+      /* =========================
+       * PARENT CATEGORY LOOKUP
+       * ========================= */
       {
         $lookup: {
-          from: 'product_category',
+          from: 'product_categories',
           localField: 'category.parentId',
           foreignField: 'categoryId',
           as: 'parentCategory',
         },
       },
-      { $unwind: { path: '$parentCategory', preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: {
+          path: '$parentCategory',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
+      /* =========================
+       * FINAL STRUCTURE
+       * ========================= */
       {
         $addFields: {
           'category.parent': '$parentCategory',
         },
       },
+
       {
         $project: {
           priceData: 0,
           parentCategory: 0,
+          hasPrice: 0,
         },
       },
     ]);
