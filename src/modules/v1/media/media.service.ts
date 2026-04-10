@@ -34,15 +34,9 @@ import { UpdateMediaDto } from './dto/update-media.dto';
 import { MediaQueryDto } from './dto/media-query.dto';
 import { UploadMediaDto } from './dto/upload-media.dto';
 
-import {
-  Media,
-  MediaSchema,
-} from 'src/core/database/mongo/schema/media.schema';
+import { Media, MediaSchema } from 'src/core/database/mongo/schema/media.schema';
 
-import {
-  MEDIA_PURPOSE,
-  MEDIA_TYPE,
-} from 'src/shared/constants/media.constants';
+import { MEDIA_PURPOSE, MEDIA_TYPE } from 'src/shared/constants/media.constants';
 
 import { ChecksumUtil } from 'src/shared/utils/checksum.utils';
 
@@ -118,11 +112,7 @@ export class MediaService extends MongoRepository<Media> {
    * - Duplicate detection is checksum-based
    * - Limits depend on owner + purpose + type
    */
-  async uploadAndCreate(
-    file: Express.Multer.File,
-    body: UploadMediaDto,
-    user?: any,
-  ) {
+  async uploadAndCreate(file: any, body: UploadMediaDto, user?: any) {
     const ownerType = body.ownerType;
     const ownerId = body.ownerId;
     const subOwnerId = body.subOwnerId ?? null;
@@ -233,10 +223,7 @@ export class MediaService extends MongoRepository<Media> {
    * Purpose : Fetch single media record
    */
   async findByMediaId(mediaId: string) {
-    const media = await this.findOne(
-      { mediaId, isDeleted: false },
-      { lean: true },
-    );
+    const media = await this.findOne({ mediaId, isDeleted: false }, { lean: true });
 
     if (!media) throw new NotFoundException(MEDIA.NOT_FOUND);
 
@@ -257,16 +244,8 @@ export class MediaService extends MongoRepository<Media> {
    * - File replacement with checksum check
    * - Metadata updates
    */
-  async updateMedia(
-    mediaId: string,
-    dto: UpdateMediaDto,
-    file?: Express.Multer.File,
-    user?: any,
-  ) {
-    const existing = await this.findOne(
-      { mediaId, isDeleted: false },
-      { lean: true },
-    );
+  async updateMedia(mediaId: string, dto: UpdateMediaDto, file?: any, user?: any) {
+    const existing = await this.findOne({ mediaId, isDeleted: false }, { lean: true });
 
     if (!existing) throw new NotFoundException(MEDIA.NOT_FOUND);
 
@@ -291,13 +270,7 @@ export class MediaService extends MongoRepository<Media> {
     };
 
     if (file) {
-      await this.replaceFile(
-        existing,
-        file,
-        nextMediaType,
-        nextPurpose,
-        mediaId,
-      );
+      await this.replaceFile(existing, file, nextMediaType, nextPurpose, mediaId);
 
       payload.storageKey = existing.storageKey;
       payload.url = existing.url;
@@ -314,10 +287,7 @@ export class MediaService extends MongoRepository<Media> {
    * Purpose : Permanently remove media from DB and storage
    */
   async hardDelete(mediaId: string) {
-    const media = await this.findOne(
-      { mediaId, isDeleted: false },
-      { lean: true },
-    );
+    const media = await this.findOne({ mediaId, isDeleted: false }, { lean: true });
 
     if (!media) throw new NotFoundException(MEDIA.NOT_FOUND);
 
@@ -385,7 +355,7 @@ export class MediaService extends MongoRepository<Media> {
    */
   private async replaceFile(
     media: any,
-    file: Express.Multer.File,
+    file: any,
     mediaType: string,
     purpose: string,
     mediaId: string,

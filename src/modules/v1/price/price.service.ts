@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  HttpStatus,
+  BadRequestException,
+} from '@nestjs/common';
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
@@ -11,10 +17,17 @@ import { CreatePriceDto } from './dto/create-price.dto';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { PriceQueryDto } from './dto/price-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
+import * as XLSX from 'xlsx';
+import { PriceType } from 'src/shared/enums/product.enums';
+import { PriceStatus } from 'src/shared/enums/price.enums';
+import { ProductService } from '../product/product.service';
 
 @Injectable()
 export class PriceService extends MongoRepository<Price> {
-  constructor(mongo: MongoService) {
+  constructor(
+    mongo: MongoService,
+    private readonly productService: ProductService,
+  ) {
     super(mongo.getModel(Price.name, PriceSchema));
   }
 
@@ -137,6 +150,114 @@ export class PriceService extends MongoRepository<Price> {
       statusCode: HttpStatus.OK,
       message: PRICE.DELETED,
       data: existing,
+    };
+  }
+
+  async bulkUpload(file: any) {
+    /* ======================================================
+     * READ EXCEL
+     * ====================================================== */
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: null });
+
+    if (!rows.length) {
+      throw new BadRequestException('Excel file is empty');
+    }
+
+    /* ======================================================
+     * HEADER VALIDATION
+     * ====================================================== */
+    const requiredHeaders = ['productId', 'price'];
+    const fileHeaders = Object.keys(rows[0]);
+
+    const missingHeaders = requiredHeaders.filter((h) => !fileHeaders.includes(h));
+
+    if (missingHeaders.length) {
+      throw new BadRequestException(`Missing required columns: ${missingHeaders.join(', ')}`);
+    }
+
+    /* ======================================================
+     * FETCH ALL PRODUCTS (OPTIMIZED)
+     * ====================================================== */
+    const productIds = [...new Set(rows.map((r) => r.productId).filter(Boolean))];
+
+    const products = await this.productService.find(
+      { productId: { $in: productIds }, isDeleted: { $ne: true } } as any,
+      { lean: true },
+    );
+
+    const productMap = new Set(products.map((p) => p.productId));
+
+    /* ======================================================
+     * PROCESS ROWS
+     * ====================================================== */
+    const successData: any[] = [];
+    const failedData: any[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 2;
+
+      try {
+        /* ---------- VALIDATION ---------- */
+        if (!row.productId) {
+          throw new Error('productId is required');
+        }
+
+        if (!productMap.has(row.productId)) {
+          throw new Error(`Invalid productId: ${row.productId}`);
+        }
+
+        if (!row.price || isNaN(row.price)) {
+          throw new Error('price must be a valid number');
+        }
+
+        /* ---------- TRANSFORM ---------- */
+        const payload = {
+          priceId: IdGenerator.generate('PRIC', 8),
+          productId: row.productId,
+          price: Number(row.price),
+          type: row.type || PriceType.STANDARD,
+          effectiveAt: row.effectiveAt ? new Date(row.effectiveAt) : new Date(),
+          status: PriceStatus.ACTIVE,
+        };
+
+        successData.push(payload);
+      } catch (error: any) {
+        failedData.push({
+          row: rowNumber,
+          error: error.message,
+          data: row,
+        });
+      }
+    }
+
+    /* ======================================================
+     * BULK INSERT
+     * ====================================================== */
+    if (successData.length) {
+      try {
+        await this.model.insertMany(successData, { ordered: false });
+      } catch (error) {
+        // ignore duplicate errors
+      }
+    }
+
+    /* ======================================================
+     * RESPONSE
+     * ====================================================== */
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: PRICE.BULK_UPLOADED,
+      data: {
+        total: rows.length,
+        success: successData.length,
+        failed: failedData.length,
+        failedData,
+      },
     };
   }
 

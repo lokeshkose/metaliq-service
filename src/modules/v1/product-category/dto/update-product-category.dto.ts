@@ -6,6 +6,4 @@ import { CreateProductCategoryDto } from './create-product-category.dto';
  * =================
  * DTO for updating ProductCategory
  */
-export class UpdateProductCategoryDto extends PartialType(
-  OmitType(CreateProductCategoryDto, [] as const),
-) {}
+export class UpdateProductCategoryDto extends PartialType(CreateProductCategoryDto) {}

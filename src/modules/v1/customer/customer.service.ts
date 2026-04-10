@@ -15,14 +15,19 @@ import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
-import { UserService } from '../user/user.service'; // ✅ ADD
+import { UserService } from '../user/user.service';
 import { UserType } from 'src/shared/enums/user.enums';
+import { InjectModel } from '@nestjs/mongoose';
+import { Inquiry } from 'src/core/database/mongo/schema/inquiry.schema';
+import { Model } from 'mongoose';
+import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 @Injectable()
 export class CustomerService extends MongoRepository<Customer> {
   constructor(
     mongo: MongoService,
-    private readonly userService: UserService, // ✅ INJECT
+    private readonly userService: UserService,
+    @InjectModel(Inquiry.name) private InquiryModal: Model<Inquiry>,
   ) {
     super(mongo.getModel(Customer.name, CustomerSchema));
   }
@@ -123,7 +128,7 @@ export class CustomerService extends MongoRepository<Customer> {
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
 
-      filter.$or = [{ customerId: regex }, { name: regex }, { mobile: regex }, { email: regex }];
+      filter.$or = [{ name: regex }, { mobile: regex }, { email: regex }];
     }
 
     const result = await this.paginate(filter, {
@@ -224,6 +229,60 @@ export class CustomerService extends MongoRepository<Customer> {
       statusCode: HttpStatus.OK,
       message: CUSTOMER.DELETED,
       data: existing,
+    };
+  }
+
+  async getKpi(query: { customerId?: string }) {
+    const { customerId } = query;
+
+    /* ======================================================
+     * MATCH FILTER
+     * ====================================================== */
+    const match: any = {
+      isDeleted: { $ne: true },
+    };
+
+    if (customerId) {
+      match.customerId = customerId; // ✅ FIXED
+    }
+
+    /* ======================================================
+     * AGGREGATION
+     * ====================================================== */
+    const result = await this.InquiryModal.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    /* ======================================================
+     * DEFAULT RESPONSE (IMPORTANT)
+     * ====================================================== */
+    const response: Record<string, number> = {
+      [InquiryStatus.PENDING]: 0,
+      [InquiryStatus.CLOSED]: 0,
+      [InquiryStatus.REJECTED]: 0,
+      [InquiryStatus.RESPONDED]: 0,
+      [InquiryStatus.CANCELLED]: 0,
+      TOTAL: 0,
+    };
+
+    result.forEach((item) => {
+      response[item._id] = item.count;
+      response.TOTAL += item.count;
+    });
+
+    /* ======================================================
+     * RESPONSE
+     * ====================================================== */
+    return {
+      statusCode: HttpStatus.OK,
+      message: CUSTOMER.KPI_FETCHED,
+      data: response,
     };
   }
 

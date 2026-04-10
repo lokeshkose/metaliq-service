@@ -22,11 +22,6 @@ export class ProductCategoryQueryDto extends PaginationDto {
   @IsString()
   categoryId?: string;
 
-  @ApiPropertyOptional({ type: String })
-  @IsOptional()
-  @IsString()
-  name?: string;
-
   @ApiPropertyOptional({ enum: ProductCategoryStatus })
   @IsOptional()
   @IsEnum(ProductCategoryStatus)

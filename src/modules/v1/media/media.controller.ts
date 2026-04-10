@@ -30,23 +30,13 @@ import {
   UseInterceptors,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiConsumes,
-  ApiBody,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 import { Public } from 'src/core/decorators/public.decorator';
 import { FeatureFlag } from 'src/core/decorators/feature-flag.decorator';
 
-import {
-  API_MODULE,
-  API_MODULE_ENABLE_KEYS,
-  V1,
-} from 'src/shared/constants/api.constants';
+import { API_MODULE, API_MODULE_ENABLE_KEYS, V1 } from 'src/shared/constants/api.constants';
 
 import { MediaQueryDto } from './dto/media-query.dto';
 import { UploadMediaDto } from './dto/upload-media.dto';
@@ -84,11 +74,7 @@ export class MediaController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: UploadMediaDto })
   @UseInterceptors(FileInterceptor('file'))
-  async upload(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() body: UploadMediaDto,
-    @Req() req: any,
-  ) {
+  async upload(@UploadedFile() file: any, @Body() body: UploadMediaDto, @Req() req: any) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
@@ -152,16 +138,11 @@ export class MediaController {
   @UseInterceptors(FileInterceptor('file'))
   async update(
     @Param('mediaId') mediaId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: File,
     @Body() dto: UpdateMediaDto,
     @Req() req: any,
   ) {
-    return this.mediaService.updateMedia(
-      mediaId,
-      dto,
-      file,
-      req.user,
-    );
+    return this.mediaService.updateMedia(mediaId, dto, file, req.user);
   }
 
   /**

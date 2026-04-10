@@ -43,6 +43,13 @@ export class Inquiry {
   })
   customerId!: string;
 
+  @Prop({
+    required: true,
+    type: String,
+    index: true,
+  })
+  customerName!: string;
+
   /* ======================================================
    * PRICING
    * ====================================================== */
@@ -53,12 +60,27 @@ export class Inquiry {
   @Prop({ required: true, type: Number })
   customerPrice!: number;
 
+  @Prop({ type: Number, default: 0 })
+  offeredPrice!: number;
+
   /* ======================================================
    * QUANTITY
    * ====================================================== */
 
   @Prop({ required: true, type: Number })
   customerQuantity!: number;
+
+  @Prop({ default: 0, type: Number })
+  offeredQuantity!: number;
+
+  @Prop({ type: String })
+  remark!: string;
+
+  @Prop({ type: String })
+  comments!: string;
+
+  @Prop({ type: String })
+  purpose!: string;
 
   /* ======================================================
    * STATUS

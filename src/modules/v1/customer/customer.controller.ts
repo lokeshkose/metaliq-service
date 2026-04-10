@@ -47,6 +47,8 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
 import { CUSTOMER } from './customer.constants';
+import { CustomerKpiQueryDto } from './dto/customer-kpi-query.dto';
+import { Public } from 'src/core/decorators/public.decorator';
 
 @ApiTags('Customer')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.CUSTOMER)
@@ -64,6 +66,7 @@ export class CustomerController {
    * Create Customer
    * ---------------
    */
+  @Public()
   @Permissions('CUSTOMER_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -72,6 +75,35 @@ export class CustomerController {
   @ApiSuccessResponse({ customerId: 'CUST-001' }, CUSTOMER.CREATED, HttpStatus.CREATED)
   async create(@Body() dto: CreateCustomerDto) {
     return this.service.create(dto);
+  }
+
+  /**
+   * Employee KPI
+   * ----------------
+   */
+  @Permissions('EMPLOYEE_VIEW')
+  @Get('kpi')
+  @ApiOperation({ summary: 'Get employee KPI (inquiry, customer, product stats)' })
+  @ApiSuccessResponse(
+    {
+      totalInquiries: 25,
+      pendingInquiryCount: 10,
+      customerCount: 50,
+      productCount: 100,
+      categoryCount: 12,
+      statusCounts: {
+        PENDING: 10,
+        CLOSED: 5,
+        REJECTED: 2,
+        RESPONDED: 7,
+        CANCELLED: 1,
+      },
+    },
+    'Cuistomer KPI fetched successfully',
+  )
+  @Get('kpi')
+  async getKpi(@Query() query: CustomerKpiQueryDto) {
+    return this.service.getKpi(query);
   }
 
   /**

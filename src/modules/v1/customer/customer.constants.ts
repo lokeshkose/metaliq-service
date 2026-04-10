@@ -5,4 +5,5 @@ export const CUSTOMER = {
   DELETED: 'Customer deleted successfully',
   NOT_FOUND: 'Customer not found',
   DUPLICATE: 'Customer already exists',
+  KPI_FETCHED: 'Customer KPI fetched successfully',
 };

@@ -85,6 +85,34 @@ export class EmployeeController {
   }
 
   /**
+   * Employee KPI
+   * ----------------
+   */
+  @Permissions('EMPLOYEE_VIEW')
+  @Get('kpi')
+  @ApiOperation({ summary: 'Get employee KPI (inquiry, customer, product stats)' })
+  @ApiSuccessResponse(
+    {
+      totalInquiries: 25,
+      pendingInquiryCount: 10,
+      customerCount: 50,
+      productCount: 100,
+      categoryCount: 12,
+      statusCounts: {
+        PENDING: 10,
+        CLOSED: 5,
+        REJECTED: 2,
+        RESPONDED: 7,
+        CANCELLED: 1,
+      },
+    },
+    'Employee KPI fetched successfully',
+  )
+  async getKpi(@Query('employeeId') employeeId?: string) {
+    return this.service.getEmployeeKpi({ employeeId });
+  }
+
+  /**
    * Get Employee by ID
    * ------------------
    */

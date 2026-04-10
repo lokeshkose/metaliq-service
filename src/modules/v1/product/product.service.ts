@@ -1,10 +1,4 @@
-
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpStatus } from '@nestjs/common';
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
@@ -19,6 +13,7 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
+import { ProductStatus } from 'src/shared/enums/product.enums';
 
 @Injectable()
 export class ProductService extends MongoRepository<Product> {
@@ -34,8 +29,6 @@ export class ProductService extends MongoRepository<Product> {
         }
         const filter: FilterQuery<Product> = {};
 
-        
-
         const existing = await this.findOne(filter, {
           session,
           includeDeleted: true,
@@ -50,7 +43,7 @@ export class ProductService extends MongoRepository<Product> {
             existing._id.toString(),
             {
               ...payload,
-              status: 'ACTIVE',
+              status: ProductStatus.ACTIVE,
               isDeleted: false,
             },
             { session },
@@ -91,33 +84,181 @@ export class ProductService extends MongoRepository<Product> {
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ productId: regex }];
+      filter.$or = [{ name: regex }];
     }
 
-    const result = await this.paginate(filter, {
-      page,
-      limit,
-      sort: { createdAt: -1 },
-      lean: true,
-    });
+    const skip = (page - 1) * limit;
+
+    const data = await this.model.aggregate([
+      { $match: filter },
+
+      /* =========================
+       * PRICE LOOKUP
+       * ========================= */
+      {
+        $lookup: {
+          from: 'price_master',
+          let: { productId: '$productId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$productId', '$$productId'] },
+              },
+            },
+            { $sort: { effectiveAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: 'priceData',
+        },
+      },
+
+      {
+        $addFields: {
+          price: { $arrayElemAt: ['$priceData.price', 0] },
+        },
+      },
+
+      /* =========================
+       * CATEGORY LOOKUP
+       * ========================= */
+      {
+        $lookup: {
+          from: 'product_category',
+          localField: 'categoryId',
+          foreignField: 'categoryId',
+          as: 'category',
+        },
+      },
+      {
+        $unwind: {
+          path: '$category',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      /* =========================
+       * PARENT CATEGORY LOOKUP
+       * ========================= */
+      {
+        $lookup: {
+          from: 'product_category',
+          localField: 'category.parentId',
+          foreignField: 'categoryId',
+          as: 'parentCategory',
+        },
+      },
+      {
+        $unwind: {
+          path: '$parentCategory',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      /* =========================
+       * FINAL STRUCTURE
+       * ========================= */
+      {
+        $addFields: {
+          'category.parent': '$parentCategory',
+        },
+      },
+
+      {
+        $project: {
+          priceData: 0,
+          parentCategory: 0,
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]);
+
+    const total = await this.model.countDocuments(filter);
 
     return {
       statusCode: HttpStatus.OK,
       message: PRODUCT.FETCHED,
-      data: result.items,
-      meta: result.meta,
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+      },
     };
   }
 
   async findByProductId(productId: string) {
-    const doc = await this.findOne({ productId }, { lean: true });
+    const result = await this.model.aggregate([
+      { $match: { productId } },
 
-    if (!doc) throw new NotFoundException(PRODUCT.NOT_FOUND);
+      /* PRICE */
+      {
+        $lookup: {
+          from: 'price_master',
+          let: { productId: '$productId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$productId', '$$productId'] },
+              },
+            },
+            { $sort: { effectiveAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: 'priceData',
+        },
+      },
+      {
+        $addFields: {
+          price: { $arrayElemAt: ['$priceData.price', 0] },
+        },
+      },
+
+      /* CATEGORY */
+      {
+        $lookup: {
+          from: 'product_category',
+          localField: 'categoryId',
+          foreignField: 'categoryId',
+          as: 'category',
+        },
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+
+      /* PARENT CATEGORY */
+      {
+        $lookup: {
+          from: 'product_category',
+          localField: 'category.parentId',
+          foreignField: 'categoryId',
+          as: 'parentCategory',
+        },
+      },
+      { $unwind: { path: '$parentCategory', preserveNullAndEmptyArrays: true } },
+
+      {
+        $addFields: {
+          'category.parent': '$parentCategory',
+        },
+      },
+      {
+        $project: {
+          priceData: 0,
+          parentCategory: 0,
+        },
+      },
+    ]);
+
+    if (!result.length) {
+      throw new NotFoundException(PRODUCT.NOT_FOUND);
+    }
 
     return {
       statusCode: HttpStatus.OK,
       message: PRODUCT.FETCHED,
-      data: doc,
+      data: result[0],
     };
   }
 
@@ -128,11 +269,7 @@ export class ProductService extends MongoRepository<Product> {
           dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
         }
 
-        const doc = await this.updateOne(
-          { productId },
-          dto,
-          { session, new: true },
-        );
+        const doc = await this.updateOne({ productId }, dto, { session, new: true });
 
         if (!doc) throw new NotFoundException(PRODUCT.NOT_FOUND);
 

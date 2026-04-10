@@ -6,4 +6,14 @@ import { CreateInquiryDto } from './create-inquiry.dto';
  * =================
  * DTO for updating Inquiry
  */
-export class UpdateInquiryDto extends PartialType(OmitType(CreateInquiryDto, [] as const)) {}
+export class UpdateInquiryDto extends PartialType(
+  OmitType(CreateInquiryDto, [
+    'basePrice',
+    'customerId',
+    'customerPrice',
+    'customerQuantity',
+    'productId',
+    'productName',
+    'comments',
+  ] as const),
+) {}

@@ -23,7 +23,10 @@ export class Customer {
    * ====================================================== */
 
   @Prop({ required: true, trim: true, type: String })
-  name!: string;
+  firstName!: string;
+
+  @Prop({ required: true, trim: true, type: String })
+  lastName!: string;
 
   @Prop({
     trim: true,

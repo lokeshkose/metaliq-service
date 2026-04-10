@@ -1,10 +1,4 @@
-import {
-  Model,
-  ClientSession,
-  UpdateQuery,
-  ProjectionType,
-  HydratedDocument,
-} from 'mongoose';
+import { Model, ClientSession, UpdateQuery, ProjectionType, HydratedDocument } from 'mongoose';
 import {
   PaginatedResult,
   PaginationOptions,
@@ -35,10 +29,7 @@ export abstract class MongoRepository<T> {
     return doc;
   }
 
-  async bulkCreate(
-    data: Partial<T>[],
-    options?: RepoOptions,
-  ): Promise<Doc<T>[]> {
+  async bulkCreate(data: Partial<T>[], options?: RepoOptions): Promise<Doc<T>[]> {
     return this.model.insertMany(data, {
       session: options?.session,
     }) as unknown as Promise<Doc<T>[]>;
@@ -48,10 +39,7 @@ export abstract class MongoRepository<T> {
    * READ
    * ====================================================== */
 
-  async findOne(
-    filter: FilterQuery<T>,
-    options?: RepoOptions,
-  ): Promise<Doc<T> | null> {
+  async findOne(filter: FilterQuery<T>, options?: RepoOptions): Promise<Doc<T> | null> {
     return this.model
       .findOne(this.applySoftDelete(filter, options))
       .setOptions(options ?? {})
@@ -77,23 +65,15 @@ export abstract class MongoRepository<T> {
       .exec();
   }
 
-  async find(
-    filter: FilterQuery<T> = {},
-    options?: RepoOptions,
-  ): Promise<Doc<T>[]> {
-    const query = this.model
-      .find(this.applySoftDelete(filter, options))
-      .setOptions(options ?? {});
+  async find(filter: FilterQuery<T> = {}, options?: RepoOptions): Promise<Doc<T>[]> {
+    const query = this.model.find(this.applySoftDelete(filter, options)).setOptions(options ?? {});
 
     if (options?.sort) query.sort(options.sort);
 
     return query.exec();
   }
 
-  async findLean(
-    filter: FilterQuery<T> = {},
-    options?: RepoOptions,
-  ): Promise<Partial<T>[]> {
+  async findLean(filter: FilterQuery<T> = {}, options?: RepoOptions): Promise<Partial<T>[]> {
     return this.model
       .find(this.applySoftDelete(filter, options))
       .setOptions(options ?? {})
@@ -101,13 +81,8 @@ export abstract class MongoRepository<T> {
       .exec();
   }
 
-  async exists(
-    filter: FilterQuery<T>,
-    options?: RepoOptions,
-  ): Promise<boolean> {
-    return Boolean(
-      await this.model.exists(this.applySoftDelete(filter, options)),
-    );
+  async exists(filter: FilterQuery<T>, options?: RepoOptions): Promise<boolean> {
+    return Boolean(await this.model.exists(this.applySoftDelete(filter, options)));
   }
 
   /* ======================================================
@@ -149,20 +124,14 @@ export abstract class MongoRepository<T> {
     update: UpdateQuery<T>,
     options?: RepoOptions,
   ): Promise<boolean> {
-    const res = await this.model.updateOne(
-      this.applySoftDelete(filter, options),
-      update as any,
-      { session: options?.session },
-    );
+    const res = await this.model.updateOne(this.applySoftDelete(filter, options), update as any, {
+      session: options?.session,
+    });
 
     return res.modifiedCount > 0;
   }
 
-  async updateById(
-    id: string,
-    update: UpdateQuery<T>,
-    options?: RepoOptions,
-  ): Promise<boolean> {
+  async updateById(id: string, update: UpdateQuery<T>, options?: RepoOptions): Promise<boolean> {
     const res = await this.model.updateOne({ _id: id } as any, update as any, {
       session: options?.session,
     });
@@ -186,10 +155,7 @@ export abstract class MongoRepository<T> {
    * DELETE (SOFT + HARD)
    * ====================================================== */
 
-  async softDelete(
-    filter: FilterQuery<T>,
-    options?: RepoOptions,
-  ): Promise<boolean> {
+  async softDelete(filter: FilterQuery<T>, options?: RepoOptions): Promise<boolean> {
     const res = await this.model.updateOne(
       filter,
       { isDeleted: true },
@@ -199,10 +165,7 @@ export abstract class MongoRepository<T> {
     return res.modifiedCount > 0;
   }
 
-  async restore(
-    filter: FilterQuery<T>,
-    options?: RepoOptions,
-  ): Promise<boolean> {
+  async restore(filter: FilterQuery<T>, options?: RepoOptions): Promise<boolean> {
     const res = await this.model.updateOne(
       { ...filter, isDeleted: true } as any,
       { isDeleted: false, deletedAt: null },
@@ -224,46 +187,43 @@ export abstract class MongoRepository<T> {
    * TRANSACTIONS
    * ====================================================== */
 
- async withTransaction<R>(
-  fn: (session: ClientSession) => Promise<R>,
-  existingSession?: ClientSession,
-): Promise<R> {
-  const session = existingSession || (await this.model.db.startSession());
+  async withTransaction<R>(
+    fn: (session: ClientSession) => Promise<R>,
+    existingSession?: ClientSession,
+  ): Promise<R> {
+    const session = existingSession || (await this.model.db.startSession());
 
-  const isNewSession = !existingSession;
+    const isNewSession = !existingSession;
 
-  if (isNewSession) {
-    session.startTransaction();
+    if (isNewSession) {
+      session.startTransaction();
+    }
+
+    try {
+      const result = await fn(session);
+
+      if (isNewSession) {
+        await session.commitTransaction();
+      }
+
+      return result;
+    } catch (e) {
+      if (isNewSession) {
+        await session.abortTransaction();
+      }
+      throw e;
+    } finally {
+      if (isNewSession) {
+        session.endSession();
+      }
+    }
   }
-
-  try {
-    const result = await fn(session);
-
-    if (isNewSession) {
-      await session.commitTransaction();
-    }
-
-    return result;
-  } catch (e) {
-    if (isNewSession) {
-      await session.abortTransaction();
-    }
-    throw e;
-  } finally {
-    if (isNewSession) {
-      session.endSession();
-    }
-  }
-}
 
   /* ======================================================
    * INTERNAL
    * ====================================================== */
 
-  private applySoftDelete(
-    filter: FilterQuery<T>,
-    options?: RepoOptions,
-  ): FilterQuery<T> {
+  private applySoftDelete(filter: FilterQuery<T>, options?: RepoOptions): FilterQuery<T> {
     if (options?.includeDeleted) return filter;
     return { ...filter, isDeleted: false };
   }
@@ -277,11 +237,9 @@ export abstract class MongoRepository<T> {
     update: UpdateQuery<T>,
     options?: RepoOptions,
   ): Promise<number> {
-    const res = await this.model.updateMany(
-      this.applySoftDelete(filter, options),
-      update as any,
-      { session: options?.session },
-    );
+    const res = await this.model.updateMany(this.applySoftDelete(filter, options), update as any, {
+      session: options?.session,
+    });
 
     return res.modifiedCount ?? 0;
   }
@@ -313,13 +271,22 @@ export abstract class MongoRepository<T> {
     return res.modifiedCount ?? 0;
   }
 
-  async countDocuments(filter: FilterQuery<T> = {}): Promise<number> {
-    return this.model.countDocuments(this.applySoftDelete(filter));
+  async countDocuments(filter: FilterQuery<T> = {}, options: any = {}): Promise<number> {
+    return this.model.countDocuments(this.applySoftDelete(filter, {}));
   }
 
-  async deleteDocument(
-    filter: FilterQuery<T> = {} as any,
-  ): Promise<Doc<T> | null> {
+  async deleteDocument(filter: FilterQuery<T> = {} as any): Promise<Doc<T> | null> {
     return this.model.findOneAndDelete(filter);
+  }
+
+  /* ======================================================
+   * AGGREGATION
+   * ====================================================== */
+
+  async aggregate<R = any>(pipeline: any[], options?: { session?: ClientSession }): Promise<R[]> {
+    return this.model
+      .aggregate(pipeline)
+      .session(options?.session || null)
+      .exec();
   }
 }

@@ -16,6 +16,7 @@ import { ProductCategoryQueryDto } from './dto/product-category-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
+import { ProductCategoryStatus } from 'src/shared/enums/product-category.enums';
 
 @Injectable()
 export class ProductCategoryService extends MongoRepository<ProductCategory> {
@@ -45,7 +46,7 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
             existing._id.toString(),
             {
               ...payload,
-              status: 'ACTIVE',
+              status: ProductCategoryStatus.ACTIVE,
               isDeleted: false,
             },
             { session },
@@ -86,7 +87,7 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ categoryId: regex }];
+      filter.$or = [{ name: regex }];
     }
 
     const result = await this.paginate(filter, {

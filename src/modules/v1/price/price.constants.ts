@@ -5,4 +5,5 @@ export const PRICE = {
   DELETED: 'Price deleted successfully',
   NOT_FOUND: 'Price not found',
   DUPLICATE: 'Price already exists',
+  BULK_UPLOADED: 'Bulk price upload successfully',
 };

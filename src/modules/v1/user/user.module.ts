@@ -15,6 +15,7 @@ import { Customer, CustomerSchema } from 'src/core/database/mongo/schema/custome
 
 import { DeviceModule } from '../device/device.module';
 import { RoleModule } from '../role/role.module';
+import { MailModule } from 'src/core/mail/mail.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RoleModule } from '../role/role.module';
 
     DeviceModule,
     RoleModule,
+    MailModule,
   ],
 
   controllers: [UserController],

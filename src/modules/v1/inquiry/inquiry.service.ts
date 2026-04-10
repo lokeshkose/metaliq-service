@@ -11,6 +11,7 @@ import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
 import { InquiryQueryDto } from './dto/inquiry-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
+import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 @Injectable()
 export class InquiryService extends MongoRepository<Inquiry> {
@@ -20,8 +21,14 @@ export class InquiryService extends MongoRepository<Inquiry> {
 
   async create(payload: CreateInquiryDto) {
     try {
+      const { productId, customerId, customerPrice, customerQuantity } = payload;
       return await this.withTransaction(async (session) => {
-        const filter: FilterQuery<Inquiry> = {};
+        const filter: FilterQuery<Inquiry> = {
+          productId,
+          customerId,
+          customerPrice,
+          customerQuantity,
+        };
 
         const existing = await this.findOne(filter, {
           session,
@@ -37,7 +44,7 @@ export class InquiryService extends MongoRepository<Inquiry> {
             existing._id.toString(),
             {
               ...payload,
-              status: 'ACTIVE',
+              status: InquiryStatus.PENDING,
               isDeleted: false,
             },
             { session },
@@ -50,9 +57,11 @@ export class InquiryService extends MongoRepository<Inquiry> {
           };
         }
 
+        const count = await this.countDocuments({}, { session });
+
         const doc = await this.save(
           {
-            inquiryId: IdGenerator.generate('INQU', 8),
+            inquiryId: `INQ${String(count + 1).padStart(5, '0')}`,
             ...payload,
           },
           { session },
@@ -78,7 +87,8 @@ export class InquiryService extends MongoRepository<Inquiry> {
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ inquiryId: regex }];
+
+      filter.$or = [{ inquiryId: regex }, { customerName: regex }];
     }
 
     const result = await this.paginate(filter, {

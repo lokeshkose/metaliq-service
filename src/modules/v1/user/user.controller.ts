@@ -142,6 +142,16 @@ export class UserController {
     return result;
   }
 
+  @Post('forgot-password')
+  async forgotPassword(@Body('userId') userId: string) {
+    return this.userService.forgotPassword(userId);
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body('token') token: string, @Body('password') password: string) {
+    return this.userService.resetPassword(token, password);
+  }
+
   /* ======================================================
    * REFRESH TOKEN
    * ------------------------------------------------------

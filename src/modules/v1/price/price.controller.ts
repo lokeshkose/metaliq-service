@@ -16,6 +16,7 @@
  */
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -26,6 +27,8 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
@@ -33,7 +36,6 @@ import { FeatureFlag } from 'src/core/decorators/feature-flag.decorator';
 import { ApiSuccessResponse } from 'src/core/swagger/api.response.swagger';
 import {
   ApiInternalErrorResponse,
-  ApiNotFoundResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from 'src/core/swagger/api-error.response.swagger';
@@ -47,6 +49,7 @@ import { CreatePriceDto } from './dto/create-price.dto';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { PriceQueryDto } from './dto/price-query.dto';
 import { PRICE } from './price.constants';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Price')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.PRICE)
@@ -72,6 +75,22 @@ export class PriceController {
   @ApiSuccessResponse({ priceId: 'PRIC-001' }, PRICE.CREATED, HttpStatus.CREATED)
   async create(@Body() dto: CreatePriceDto) {
     return this.service.create(dto);
+  }
+
+  /**
+   * Bulk Upload Prices (Excel)
+   * --------------------------
+   */
+  @Permissions('PRICE_CREATE')
+  @Post('bulk-upload')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Bulk upload prices via Excel' })
+  async bulkUpload(@UploadedFile() file: any) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    return this.service.bulkUpload(file);
   }
 
   /**

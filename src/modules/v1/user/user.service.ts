@@ -36,6 +36,7 @@ import { DeviceStatus } from 'src/shared/enums/device.enums';
 import { UserStatus } from 'src/shared/enums/user.enums';
 import { CreateUserDto } from './dto/create-user.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
+import { MailService } from 'src/core/mail/mail.service';
 
 @Injectable()
 export class UserService extends MongoRepository<User> {
@@ -44,6 +45,7 @@ export class UserService extends MongoRepository<User> {
     private readonly redis: RedisRepository,
     private readonly deviceService: DeviceService,
     private readonly roleService: RoleService,
+    private readonly mailService: MailService,
 
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Employee.name) private employeeModel: Model<Employee>,
@@ -229,6 +231,8 @@ export class UserService extends MongoRepository<User> {
       user: {
         profileId: user.profileId,
         profile,
+        userType: user?.userType,
+        userId: user?.userId,
       },
       message: USER.LOGIN,
     };
@@ -342,5 +346,109 @@ export class UserService extends MongoRepository<User> {
       },
       { session },
     );
+  }
+
+  async forgotPassword(userId: string) {
+    /* ======================================================
+     * GET USER
+     * ====================================================== */
+    const user: any = await this.findOne({ userId });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    /* ======================================================
+     * GET PROFILE (BASED ON TYPE)
+     * ====================================================== */
+    let profile: any;
+
+    switch (user.userType) {
+      case 'EMPLOYEE':
+        profile = await this.employeeModel
+          .findOne({ employeeId: user.profileId, isDeleted: false })
+          .lean();
+        break;
+
+      case 'CUSTOMER':
+        profile = await this.customerModel
+          .findOne({ customerId: user.profileId, isDeleted: false })
+          .lean();
+        break;
+
+      default:
+        profile = null;
+    }
+
+    if (!profile) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    if (!profile.email) {
+      throw new BadRequestException('Email not found for this user');
+    }
+
+    /* ======================================================
+     * GENERATE TOKEN
+     * ====================================================== */
+    const token = randomUUID();
+
+    /* ======================================================
+     * STORE TOKEN IN REDIS
+     * ====================================================== */
+    await this.redis.setJson(
+      `reset:${token}`,
+      {
+        userId: user.userId,
+      },
+      10 * 60 * 1000, // 10 min
+    );
+
+    /* ======================================================
+     * CREATE RESET LINK
+     * ====================================================== */
+    const link = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+    /* ======================================================
+     * SEND EMAIL
+     * ====================================================== */
+    await this.mailService.sendMail({
+      to: profile.email, // ✅ FROM PROFILE
+      subject: 'Reset Password',
+      html: `
+      <h3>Reset Your Password</h3>
+      <p>Click below:</p>
+      <a href="${link}">${link}</a>
+      <p>Valid for 10 minutes</p>
+    `,
+    });
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Reset link sent to registered email',
+    };
+  }
+
+  async resetPassword(token: string, password: string) {
+    const data = await this.redis.getJson<any>(`reset:${token}`);
+
+    if (!data) {
+      throw new BadRequestException('Invalid or expired link');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const updated = await this.updateOne({ userId: data.userId }, { password: hashedPassword });
+
+    if (!updated) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.redis.delete(`reset:${token}`);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Password reset successful',
+    };
   }
 }

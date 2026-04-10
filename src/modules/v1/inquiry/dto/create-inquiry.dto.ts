@@ -23,6 +23,11 @@ export class CreateInquiryDto {
   @IsString()
   customerId?: string;
 
+  @ApiPropertyOptional({ type: String })
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
   @ApiPropertyOptional({ type: Number })
   @IsOptional()
   @IsNumber()
@@ -38,8 +43,13 @@ export class CreateInquiryDto {
   @IsNumber()
   customerQuantity?: number;
 
-  @ApiPropertyOptional({ enum: InquiryStatus, enumName: 'InquiryStatus' })
+  @ApiPropertyOptional({ type: String })
   @IsOptional()
-  @IsEnum(InquiryStatus)
-  status?: InquiryStatus;
+  @IsString()
+  remark?: string;
+
+  @ApiPropertyOptional({ type: String })
+  @IsOptional()
+  @IsString()
+  comments?: string;
 }

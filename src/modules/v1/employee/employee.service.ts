@@ -17,12 +17,21 @@ import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
 import { UserService } from '../user/user.service'; // ✅ ADD THIS
 import { UserType } from 'src/shared/enums/user.enums';
+import { CustomerService } from '../customer/customer.service';
+import { ProductService } from '../product/product.service';
+import { ProductCategoryService } from '../product-category/product-category.service';
+import { InquiryService } from '../inquiry/inquiry.service';
+import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 @Injectable()
 export class EmployeeService extends MongoRepository<Employee> {
   constructor(
     mongo: MongoService,
-    private readonly userService: UserService, // ✅ INJECT
+    private readonly userService: UserService, // ✅
+    private readonly customerService: CustomerService,
+    private readonly productService: ProductService,
+    private readonly productCategoryService: ProductCategoryService,
+    private readonly inquiryService: InquiryService,
   ) {
     super(mongo.getModel(Employee.name, EmployeeSchema));
   }
@@ -225,6 +234,90 @@ export class EmployeeService extends MongoRepository<Employee> {
       statusCode: HttpStatus.OK,
       message: EMPLOYEE.DELETED,
       data: existing,
+    };
+  }
+
+  async getEmployeeKpi(query: { employeeId?: string }) {
+    const { employeeId } = query;
+
+    const inquiryFilter: any = {
+      isDeleted: { $ne: true },
+    };
+
+    if (employeeId) {
+      inquiryFilter.employeeId = employeeId;
+    }
+
+    /* ======================================================
+     * PARALLEL EXECUTION (FAST 🚀)
+     * ====================================================== */
+    const [
+      totalInquiries,
+      pendingInquiryCount,
+      statusCountsRaw,
+      customerCount,
+      productCount,
+      categoryCount,
+    ] = await Promise.all([
+      // Total inquiries
+      this.inquiryService.countDocuments(inquiryFilter),
+
+      // ✅ Pending inquiries (FIXED)
+      this.inquiryService.countDocuments({
+        ...inquiryFilter,
+        status: InquiryStatus.PENDING,
+      }),
+
+      // Status-wise count
+      this.inquiryService.aggregate([
+        { $match: inquiryFilter },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+
+      // Total customers
+      this.customerService.countDocuments({ isDeleted: { $ne: true } }),
+
+      // Total products
+      this.productService.countDocuments({ isDeleted: { $ne: true } }),
+
+      // ✅ Add soft delete filter (FIXED)
+      this.productCategoryService.countDocuments({ isDeleted: { $ne: true } }),
+    ]);
+
+    /* ======================================================
+     * FORMAT STATUS COUNTS (WITH DEFAULTS)
+     * ====================================================== */
+    const statusCounts: Record<InquiryStatus, number> = {
+      [InquiryStatus.PENDING]: 0,
+      [InquiryStatus.CLOSED]: 0,
+      [InquiryStatus.REJECTED]: 0,
+      [InquiryStatus.RESPONDED]: 0,
+      [InquiryStatus.CANCELLED]: 0,
+    };
+
+    statusCountsRaw.forEach((item) => {
+      statusCounts[item._id] = item.count;
+    });
+
+    /* ======================================================
+     * RESPONSE
+     * ====================================================== */
+    return {
+      statusCode: 200,
+      message: EMPLOYEE.KPI_FETCHED,
+      data: {
+        totalInquiries,
+        pendingInquiryCount,
+        customerCount,
+        productCount,
+        categoryCount,
+        statusCounts,
+      },
     };
   }
 
