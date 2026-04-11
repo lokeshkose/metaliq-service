@@ -16,7 +16,10 @@ import { ProductCategoryQueryDto } from './dto/product-category-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
-import { ProductCategoryStatus } from 'src/shared/enums/product-category.enums';
+import {
+  ProductCategoryStatus,
+  ProductCategoryTypes,
+} from 'src/shared/enums/product-category.enums';
 
 @Injectable()
 export class ProductCategoryService extends MongoRepository<ProductCategory> {
@@ -24,13 +27,23 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     super(mongo.getModel(ProductCategory.name, ProductCategorySchema));
   }
 
+  /* ======================================================
+   * CREATE
+   * ====================================================== */
   async create(payload: CreateProductCategoryDto) {
     try {
       return await this.withTransaction(async (session) => {
         if (payload.name) {
           payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
         }
-        const filter: FilterQuery<ProductCategory> = {};
+
+        /* ======================================================
+         * DUPLICATE CHECK
+         * ====================================================== */
+        const filter: FilterQuery<ProductCategory> =
+          payload.type === ProductCategoryTypes.PARENT
+            ? { name: payload.name }
+            : { name: payload.name, parentId: payload.parentId };
 
         const existing = await this.findOne(filter, {
           session,
@@ -41,6 +54,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
           throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);
         }
 
+        /* ======================================================
+         * RESTORE SOFT DELETED
+         * ====================================================== */
         if (existing?.isDeleted) {
           await this.updateById(
             existing._id.toString(),
@@ -59,6 +75,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
           };
         }
 
+        /* ======================================================
+         * CREATE NEW
+         * ====================================================== */
         const doc = await this.save(
           {
             categoryId: IdGenerator.generate('CAT', 8),
@@ -78,6 +97,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     }
   }
 
+  /* ======================================================
+   * FIND ALL
+   * ====================================================== */
   async findAll(query: ProductCategoryQueryDto) {
     const { searchText, status, page = 1, limit = 20 } = query;
 
@@ -105,6 +127,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     };
   }
 
+  /* ======================================================
+   * FIND ONE
+   * ====================================================== */
   async findByCategoryId(categoryId: string) {
     const doc = await this.findOne({ categoryId }, { lean: true });
 
@@ -117,6 +142,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     };
   }
 
+  /* ======================================================
+   * UPDATE
+   * ====================================================== */
   async update(categoryId: string, dto: UpdateProductCategoryDto) {
     try {
       return await this.withTransaction(async (session) => {
@@ -124,9 +152,38 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
           dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
         }
 
+        const current = await this.findOne({ categoryId }, { session });
+        if (!current) {
+          throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+        }
+
+        const name = dto.name ?? current.name;
+        const parentId = dto.parentId ?? current.parentId;
+        const type = current.type; // ✅ FIXED (type is immutable)
+
+        /* ======================================================
+         * DUPLICATE CHECK
+         * ====================================================== */
+        const filter: FilterQuery<ProductCategory> =
+          type === ProductCategoryTypes.PARENT ? { name } : { name, parentId };
+
+        const existing = await this.findOne(
+          {
+            ...filter,
+            categoryId: { $ne: categoryId } as any,
+          },
+          { session },
+        );
+
+        if (existing) {
+          throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);
+        }
+
         const doc = await this.updateOne({ categoryId }, dto, { session, new: true });
 
-        if (!doc) throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+        if (!doc) {
+          throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+        }
 
         return {
           statusCode: HttpStatus.OK,
@@ -139,10 +196,15 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     }
   }
 
+  /* ======================================================
+   * DELETE
+   * ====================================================== */
   async delete(categoryId: string) {
     const existing = await this.findOne({ categoryId });
 
-    if (!existing) throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+    if (!existing) {
+      throw new NotFoundException(PRODUCT_CATEGORY.NOT_FOUND);
+    }
 
     await this.softDelete({ categoryId });
 
@@ -153,6 +215,9 @@ export class ProductCategoryService extends MongoRepository<ProductCategory> {
     };
   }
 
+  /* ======================================================
+   * ERROR HANDLER
+   * ====================================================== */
   private handleDuplicateError(error: any): never {
     if (error?.code === 11000 || error?.code === 11001) {
       throw new ConflictException(PRODUCT_CATEGORY.DUPLICATE);

@@ -1,18 +1,5 @@
 /**
  * User Controller
- * ---------------
- * Purpose : Handle user authentication lifecycle
- * Used by : WEB / MOBILE / BACK-OFFICE CLIENTS
- *
- * Responsibilities:
- * - Login with device & agent binding
- * - Refresh access tokens
- * - Logout and terminate sessions
- *
- * Notes:
- * - Authentication is device-scoped
- * - Sessions are middleware-driven
- * - JWT tokens are issued via UserService
  */
 
 import {
@@ -54,19 +41,9 @@ import { API_MODULE, API_MODULE_ENABLE_KEYS, V1 } from 'src/shared/constants/api
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  /* ======================================================
+  /**
    * LOGIN
-   * ------------------------------------------------------
-   * Purpose :
-   * - Authenticate user using loginId & password
-   * - Bind session to device & agent context
-   * - Issue access & refresh tokens
-   *
-   * Requirements:
-   * - Active session (middleware)
-   * - Valid agent header
-   * - Matching device ID
-   * ====================================================== */
+   */
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -74,20 +51,29 @@ export class UserController {
   @ApiBody({ type: LoginDto })
   @ApiSuccessResponse(
     {
-      accessToken: 'jwt.token.here',
-      refreshToken: 'uuid',
-      sessionId: 'uuid',
-      expiresIn: '15m',
+      success: true,
+      statusCode: 200,
+      message: 'Login successful',
+      data: {
+        accessToken: 'jwt.token.here',
+        refreshToken: 'uuid',
+        expiresIn: '15m',
+        expiresInMs: 900000,
+        sessionId: 'uuid',
+        user: {
+          userId: 'UID-001',
+          profileId: 'EMPL-001',
+          userType: 'EMPLOYEE',
+          profile: {
+            name: 'John Doe',
+            email: 'john@mail.com',
+          },
+        },
+      },
     },
     'Login successful',
   )
   @ApiCookieAuth('access_token')
-  // @ApiHeader({
-  //   name: 'x-agent',
-  //   description: 'Login agent context',
-  //   required: true,
-  //   enum: Agent,
-  // })
   @ApiHeader({
     name: 'x-device-id',
     description: 'Unique device identifier',
@@ -98,38 +84,22 @@ export class UserController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // Session must already be established (middleware-driven)
     const sessionId = (req as any).sessionId;
-    if (!sessionId) {
-      throw new BadRequestException('Session ID missing');
-    }
+    if (!sessionId) throw new BadRequestException('Session ID missing');
 
-    // const agent = req.headers['x-agent'] as Agent;
-    // if (!agent || !Object.values(Agent).includes(agent)) {
-    //   throw new BadRequestException('Invalid agent');
-    // }
-
-    // Device ID is mandatory for device-scoped authentication
     const deviceId = req.headers['x-device-id'] as string;
-    console.log(deviceId);
-    if (!deviceId) {
-      throw new BadRequestException('Device ID missing');
-    }
+    if (!deviceId) throw new BadRequestException('Device ID missing');
 
-    // Prevent device spoofing
     if (dto.deviceInfo.deviceId !== deviceId) {
       throw new BadRequestException('Device ID mismatch');
     }
 
-    // Delegate authentication logic to service layer
     const result = await this.userService.login(dto, sessionId, deviceId, req.ip);
 
-    // Set secure HTTP-only cookies for web clients
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      // maxAge: result.expiresInMs,
     });
 
     res.cookie('refresh_token', result.refreshToken, {
@@ -142,51 +112,69 @@ export class UserController {
     return result;
   }
 
+  /**
+   * FORGOT PASSWORD
+   */
   @Post('forgot-password')
+  @ApiOperation({ summary: 'Send reset password link' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: 'Reset link sent to registered email',
+    },
+    'Reset link sent',
+  )
   async forgotPassword(@Body('userId') userId: string) {
     return this.userService.forgotPassword(userId);
   }
 
+  /**
+   * RESET PASSWORD
+   */
   @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using token' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: 'Password reset successful',
+    },
+    'Password reset successful',
+  )
   async resetPassword(@Body('token') token: string, @Body('password') password: string) {
     return this.userService.resetPassword(token, password);
   }
 
-  /* ======================================================
+  /**
    * REFRESH TOKEN
-   * ------------------------------------------------------
-   * Purpose :
-   * - Issue a new access token for an active session
-   * - Validate refresh token & device binding
-   *
-   * Notes:
-   * - Does not create a new session
-   * ====================================================== */
+   */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiHeader({
     name: 'x-device-id',
-    description: 'Unique device identifier',
     required: true,
   })
   @ApiSuccessResponse(
     {
-      accessToken: 'new.jwt.token',
-      expiresIn: '15m',
+      success: true,
+      statusCode: 200,
+      message: 'Token refreshed',
+      data: {
+        accessToken: 'new.jwt.token',
+        expiresIn: '15m',
+        expiresInMs: 900000,
+      },
     },
     'Token refreshed',
   )
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const sessionId = (req as any).sessionId;
-    if (!sessionId) {
-      throw new BadRequestException('Session ID missing');
-    }
+    if (!sessionId) throw new BadRequestException('Session ID missing');
 
     const deviceId = req.headers['x-device-id'] as string;
-    if (!deviceId) {
-      throw new BadRequestException('Device ID missing');
-    }
+    if (!deviceId) throw new BadRequestException('Device ID missing');
 
     const refreshToken = req.cookies?.refresh_token || (req.headers['x-refresh-token'] as string);
 
@@ -200,33 +188,32 @@ export class UserController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      // maxAge: result.expiresInMs,
     });
 
     return result;
   }
 
-  /* ======================================================
+  /**
    * LOGOUT
-   * ------------------------------------------------------
-   * Purpose :
-   * - Terminate active session for a specific device
-   * - Clear authentication cookies
-   * ====================================================== */
+   */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout user' })
   @ApiHeader({
     name: 'x-device-id',
-    description: 'Unique device identifier',
     required: true,
   })
-  @ApiSuccessResponse(null, 'Logout successful')
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: 'Logout successful',
+    },
+    'Logout successful',
+  )
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const deviceId = req.headers['x-device-id'] as string;
-    if (!deviceId) {
-      throw new BadRequestException('Device ID missing');
-    }
+    if (!deviceId) throw new BadRequestException('Device ID missing');
 
     return this.userService.logout(req, res, deviceId);
   }

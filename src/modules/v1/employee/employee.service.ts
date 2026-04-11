@@ -16,12 +16,14 @@ import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
 import { UserService } from '../user/user.service'; // ✅ ADD THIS
-import { UserType } from 'src/shared/enums/user.enums';
+import { UserStatus, UserType } from 'src/shared/enums/user.enums';
 import { CustomerService } from '../customer/customer.service';
 import { ProductService } from '../product/product.service';
 import { ProductCategoryService } from '../product-category/product-category.service';
 import { InquiryService } from '../inquiry/inquiry.service';
 import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
+import { EmployeeStatus } from 'src/shared/enums/employee.enums';
+import { RedisRepository } from 'src/core/database/radis/radis.repository';
 
 @Injectable()
 export class EmployeeService extends MongoRepository<Employee> {
@@ -32,6 +34,7 @@ export class EmployeeService extends MongoRepository<Employee> {
     private readonly productService: ProductService,
     private readonly productCategoryService: ProductCategoryService,
     private readonly inquiryService: InquiryService,
+    private readonly redis: RedisRepository,
   ) {
     super(mongo.getModel(Employee.name, EmployeeSchema));
   }
@@ -70,12 +73,18 @@ export class EmployeeService extends MongoRepository<Employee> {
             {
               ...payload,
               isDeleted: false,
-              status: 'ACTIVE',
+              status: EmployeeStatus.ACTIVE,
             },
             { session },
           );
 
           employeeId = existing.employeeId;
+          await this.userService.updateOne(
+            { profileId: employeeId },
+            {
+              status: UserStatus.ACTIVE,
+            },
+          );
         } else if (existing) {
           throw new ConflictException(EMPLOYEE.DUPLICATE);
         } else {
@@ -200,6 +209,18 @@ export class EmployeeService extends MongoRepository<Employee> {
           }
         }
 
+        if (dto.status) {
+          await this.userService.updateOne(
+            { profileId: employeeId },
+            {
+              status: dto.status,
+            },
+          );
+          if (dto.status === EmployeeStatus.INACTIVE) {
+            await this.userService.logoutByProfileId(employeeId, session);
+          }
+        }
+
         /* ---------- UPDATE ---------- */
         const doc = await this.updateOne({ employeeId }, dto, { session, new: true });
 
@@ -222,19 +243,50 @@ export class EmployeeService extends MongoRepository<Employee> {
    * DELETE (SOFT)
    * ====================================================== */
   async delete(employeeId: string) {
-    const existing = await this.findOne({ employeeId });
+    return this.withTransaction(async (session) => {
+      /* ======================================================
+       * 🔍 FIND EMPLOYEE
+       * ====================================================== */
+      const existing = await this.findOne({ employeeId }, { session });
 
-    if (!existing) {
-      throw new NotFoundException(EMPLOYEE.NOT_FOUND);
-    }
+      if (!existing) {
+        throw new NotFoundException(EMPLOYEE.NOT_FOUND);
+      }
 
-    await this.softDelete({ employeeId });
+      /* ======================================================
+       * 🔍 FIND USER (BY PROFILE ID)
+       * ====================================================== */
+      const user: any = await this.userService.findOne({ profileId: employeeId }, { session });
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: EMPLOYEE.DELETED,
-      data: existing,
-    };
+      if (user) {
+        /* ======================================================
+         * 🔥 LOGOUT USER (SESSION CLEANUP)
+         * ====================================================== */
+        await this.userService.logoutByProfileId(employeeId, session);
+
+        /* ======================================================
+         * 🚫 DEACTIVATE USER
+         * ====================================================== */
+        await this.userService.updateOne(
+          { profileId: employeeId },
+          {
+            status: UserStatus.INACTIVE,
+          },
+          { session },
+        );
+      }
+
+      /* ======================================================
+       * 🗑 SOFT DELETE EMPLOYEE
+       * ====================================================== */
+      await this.softDelete({ employeeId }, { session });
+
+      return {
+        statusCode: HttpStatus.OK,
+        message: EMPLOYEE.DELETED,
+        data: existing,
+      };
+    });
   }
 
   async getEmployeeKpi(query: { employeeId?: string }) {

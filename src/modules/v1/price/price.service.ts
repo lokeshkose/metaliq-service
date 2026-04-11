@@ -34,39 +34,43 @@ export class PriceService extends MongoRepository<Price> {
   async create(payload: CreatePriceDto) {
     try {
       return await this.withTransaction(async (session) => {
-        const filter: FilterQuery<Price> = {};
+        /* ======================================================
+         * EFFECTIVE DATE HANDLING
+         * ====================================================== */
+        const now = new Date();
+        let effectiveAt: Date;
 
         if (payload.effectiveAt) {
-          payload.effectiveAt = new Date();
+          const inputDate = new Date(payload.effectiveAt);
+
+          if (isNaN(inputDate.getTime())) {
+            throw new BadRequestException('Invalid effectiveAt date');
+          }
+
+          // ✅ merge input date + current time
+          effectiveAt = new Date(
+            inputDate.getFullYear(),
+            inputDate.getMonth(),
+            inputDate.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds(),
+            now.getMilliseconds(),
+          );
+        } else {
+          effectiveAt = now;
         }
 
-        // const existing = await this.findOne(filter, {
-        //   session,
-        //   includeDeleted: true,
-        // });
+        // ❌ prevent future date
+        if (effectiveAt > now) {
+          throw new BadRequestException('effectiveAt cannot be in the future');
+        }
 
-        // if (existing && !existing.isDeleted) {
-        //   throw new ConflictException(PRICE.DUPLICATE);
-        // }
+        payload.effectiveAt = effectiveAt;
 
-        // if (existing?.isDeleted) {
-        //   await this.updateById(
-        //     existing._id.toString(),
-        //     {
-        //       ...payload,
-        //       status: 'ACTIVE',
-        //       isDeleted: false,
-        //     },
-        //     { session },
-        //   );
-
-        //   return {
-        //     statusCode: HttpStatus.OK,
-        //     message: PRICE.CREATED,
-        //     data: { priceId: existing.priceId },
-        //   };
-        // }
-
+        /* ======================================================
+         * CREATE
+         * ====================================================== */
         const doc = await this.save(
           {
             priceId: IdGenerator.generate('PRIC', 8),
@@ -184,7 +188,7 @@ export class PriceService extends MongoRepository<Price> {
     }
 
     /* ======================================================
-     * FETCH ALL PRODUCTS (OPTIMIZED)
+     * FETCH ALL PRODUCTS
      * ====================================================== */
     const productIds = [...new Set(rows.map((r) => r.productId).filter(Boolean))];
 
@@ -219,13 +223,43 @@ export class PriceService extends MongoRepository<Price> {
           throw new Error('price must be a valid number');
         }
 
+        /* ---------- EFFECTIVE DATE HANDLING ---------- */
+        const now = new Date();
+        let effectiveAt: Date;
+
+        if (row.effectiveAt) {
+          const inputDate = new Date(row.effectiveAt);
+
+          if (isNaN(inputDate.getTime())) {
+            throw new Error('Invalid effectiveAt date');
+          }
+
+          // ✅ merge input date + current time
+          effectiveAt = new Date(
+            inputDate.getFullYear(),
+            inputDate.getMonth(),
+            inputDate.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds(),
+            now.getMilliseconds(),
+          );
+        } else {
+          effectiveAt = now;
+        }
+
+        // ❌ prevent future dates
+        if (effectiveAt > now) {
+          throw new Error('effectiveAt cannot be in the future');
+        }
+
         /* ---------- TRANSFORM ---------- */
         const payload = {
           priceId: IdGenerator.generate('PRIC', 8),
           productId: row.productId,
           price: Number(row.price),
           type: row.type || PriceType.STANDARD,
-          effectiveAt: row.effectiveAt ? new Date(row.effectiveAt) : new Date(),
+          effectiveAt,
           status: PriceStatus.ACTIVE,
         };
 

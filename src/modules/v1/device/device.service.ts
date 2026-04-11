@@ -123,7 +123,7 @@ export class DeviceService extends MongoRepository<Device> {
   async update(
     identifier: { userId: string; deviceId: string },
     dto: UpdateDeviceDto,
-    options?: { upsert?: boolean },
+    options?: { upsert?: boolean; session?: ClientSession },
   ) {
     try {
       return await this.withTransaction(async (session) => {
@@ -144,7 +144,7 @@ export class DeviceService extends MongoRepository<Device> {
           message: DEVICE.UPDATED,
           data: doc,
         };
-      });
+      }, options?.session);
     } catch (error) {
       this.handleDuplicateError(error);
     }

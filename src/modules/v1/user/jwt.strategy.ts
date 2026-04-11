@@ -5,7 +5,6 @@ import { ConfigService } from '@nestjs/config';
 
 import { jwtConfig } from '../../../core/config/jwt.config';
 import { jwtExtractor } from '../../../core/auth/jwt-extractor';
-import { RequestContextStore } from 'src/core/context/request-context';
 import { RedisRepository } from 'src/core/database/radis/radis.repository';
 
 @Injectable()
@@ -29,29 +28,54 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    /* ---------- BASIC VALIDATION ---------- */
+    /* ======================================================
+     * BASIC VALIDATION
+     * ====================================================== */
     if (!payload?.sub || !payload?.sid || !payload?.did) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    /* ---------- FETCH SESSION ---------- */
-    const session = await this.redis.getJson<any>(`session:${payload.sid}`);
-    console.log(session, 'session');
+    const userId = payload.sub;
+    const sessionId = payload.sid;
+    const deviceId = payload.did;
+
+    /* ======================================================
+     * FETCH SESSION (USING HELPER)
+     * ====================================================== */
+    const session = await this.redis.getSession<any>(sessionId);
 
     if (!session) {
       throw new UnauthorizedException('Session expired');
     }
 
-    /* ---------- SECURITY CHECKS ---------- */
-    if (session.deviceId !== payload.did) {
+    /* ======================================================
+     * 🔐 SINGLE DEVICE VALIDATION (CRITICAL)
+     * ====================================================== */
+    const activeSession = await this.redis.getUserSession<any>(userId);
+
+    if (!activeSession || activeSession.deviceId !== deviceId) {
+      throw new UnauthorizedException('Logged in from another device or session invalid');
+    }
+
+    /* ======================================================
+     * SECURITY CHECKS
+     * ====================================================== */
+
+    if (session.deviceId !== deviceId) {
       throw new UnauthorizedException('Device mismatch');
     }
 
-    if (session.userId !== payload.sub) {
+    if (session.userId !== userId) {
       throw new UnauthorizedException('Token mismatch');
     }
 
-    /* ---------- RETURN USER ---------- */
+    if (!session.isActive) {
+      throw new UnauthorizedException('Session inactive');
+    }
+
+    /* ======================================================
+     * RETURN USER
+     * ====================================================== */
     return {
       userId: session.userId,
       profileId: session.profileId,
@@ -69,7 +93,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       roleStatus: session.roleStatus,
 
       deviceId: session.deviceId,
-      sessionId: payload.sid,
+      sessionId,
     };
   }
 }

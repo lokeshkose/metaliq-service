@@ -19,7 +19,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
 import { AuditAction } from 'src/shared/enums/app.enums';
 
-@Schema()
+@Schema({ collection: 'audit_logs' })
 export class AuditLog extends Document {
   /* ======================================================
    * ENTITY INFO

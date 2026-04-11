@@ -41,20 +41,20 @@ export class CreateEmployeeDto {
    * DTO for creating Employee
    */
 
-  @ApiProperty({ example: '9876543210' })
+  @ApiProperty({ example: '9876543210', required: true })
   @IsNotEmpty()
   @Matches(/^[6-9]\d{9}$/, {
     message: 'Mobile must be a valid 10-digit Indian number',
   })
   mobile!: string;
 
-  @ApiProperty({ example: 'Lokesh Kose' })
+  @ApiProperty({ example: 'Lokesh Kose', required: true })
   @IsNotEmpty()
   @IsString()
   @Length(2, 100)
   name!: string;
 
-  @ApiProperty({ example: 'Strong@123' })
+  @ApiProperty({ example: 'Strong@123', required: true })
   @IsNotEmpty()
   @Length(6, 20)
   @Matches(/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&]).+$/, {
@@ -62,12 +62,12 @@ export class CreateEmployeeDto {
   })
   password!: string;
 
-  @ApiPropertyOptional({ example: 'lokesh@gmail.com' })
+  @ApiPropertyOptional({ example: 'lokesh@gmail.com', default: null })
   @IsOptional()
   @IsEmail({}, { message: 'Invalid email format' })
   email?: string;
 
-  @ApiProperty({ example: 'ROLE001' })
+  @ApiProperty({ example: 'ROLE001', required: true })
   @IsNotEmpty()
   @IsString()
   roleId!: string;

@@ -1,7 +1,7 @@
 import { PriceType } from 'src/shared/enums/price.enums';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePriceDto {
@@ -10,15 +10,36 @@ export class CreatePriceDto {
    * =================
    * Data Transfer Object for creating new Price records
    */
-  @ApiProperty({ type: String, description: 'Business identifier for Reference' })
+
+  /* ======================================================
+   * PRODUCT
+   * ====================================================== */
+
+  @ApiProperty({
+    example: 'PROD001',
+    description: 'Product identifier',
+  })
   @IsNotEmpty()
   @IsString()
   productId!: string;
 
-  @ApiProperty({ type: Number })
+  /* ======================================================
+   * PRICE
+   * ====================================================== */
+
+  @ApiProperty({
+    example: 100,
+    description: 'Price value',
+  })
+  @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
+  @Min(1)
   price!: number;
+
+  /* ======================================================
+   * TYPE
+   * ====================================================== */
 
   @ApiPropertyOptional({
     enum: PriceType,
@@ -29,7 +50,14 @@ export class CreatePriceDto {
   @IsEnum(PriceType)
   type?: PriceType;
 
-  @ApiProperty({ type: Date })
+  /* ======================================================
+   * EFFECTIVE DATE
+   * ====================================================== */
+
+  @ApiProperty({
+    example: '2026-04-15T00:00:00.000Z',
+    description: 'Effective date of price',
+  })
   @IsNotEmpty()
   @Type(() => Date)
   @IsDate()

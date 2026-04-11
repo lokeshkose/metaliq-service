@@ -1,18 +1,5 @@
 /**
  * Inquiry Controller
- * -------------------
- * Purpose : Exposes APIs for managing inquirys
- * Used by : WEB / MOBILE / ADMIN PANEL
- *
- * Responsibilities:
- * - Create inquirys
- * - Fetch inquirys with filters & pagination
- * - Retrieve individual inquiry details
- * - Update inquiry
- * - Soft delete inquirys
- *
- * Notes:
- * - Inquirys act as master reference data
  */
 
 import {
@@ -62,57 +49,175 @@ export class InquiryController {
 
   /**
    * Create Inquiry
-   * --------------
    */
   @Permissions('INQUIRY_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create inquiry' })
   @ApiBody({ type: CreateInquiryDto })
-  @ApiSuccessResponse({ inquiryId: 'INQU-001' }, INQUIRY.CREATED, HttpStatus.CREATED)
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 201,
+      message: INQUIRY.CREATED,
+      data: {
+        inquiryId: 'INQ00001',
+      },
+    },
+    INQUIRY.CREATED,
+    HttpStatus.CREATED,
+  )
   async create(@Body() dto: CreateInquiryDto) {
     return this.service.create(dto);
   }
 
   /**
-   * Get Inquirys
-   * ------------
+   * Get Inquiries
    */
   @Get()
   @Permissions('INQUIRY_VIEW')
+  @ApiOperation({ summary: 'Get inquiry list with pagination' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: INQUIRY.FETCHED,
+      data: [
+        {
+          inquiryId: 'INQ00001',
+          customerId: 'CUST-001',
+          customerName: 'John Doe',
+          productId: 'PROD-001',
+          customerPrice: 100,
+          customerQuantity: 5,
+          status: 'PENDING',
+
+          timeline: [
+            {
+              action: 'CREATED',
+              before: null,
+              after: {
+                status: 'PENDING',
+              },
+              performedBy: {
+                userId: 'USER-001',
+                name: 'Admin',
+              },
+              metadata: {
+                ip: '127.0.0.1',
+              },
+              createdAt: '2026-04-11T10:00:00Z',
+            },
+          ],
+        },
+      ],
+      meta: {
+        totalItems: 100,
+        currentPage: 1,
+        totalPages: 5,
+        itemsPerPage: 20,
+      },
+    },
+    INQUIRY.FETCHED,
+  )
   async findAll(@Query() query: InquiryQueryDto) {
     return this.service.findAll(query);
   }
 
   /**
    * Get Inquiry by ID
-   * -----------------
    */
   @Permissions('INQUIRY_VIEW')
   @Get(':inquiryId')
+  @ApiOperation({ summary: 'Get inquiry by ID' })
   @ApiParam({ name: 'inquiryId', description: 'Inquiry inquiryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: INQUIRY.FETCHED,
+      data: {
+        inquiryId: 'INQ00001',
+        customerId: 'CUST-001',
+        customerName: 'John Doe',
+        productId: 'PROD-001',
+        customerPrice: 100,
+        customerQuantity: 5,
+        status: 'PENDING',
+
+        timeline: [
+          {
+            action: 'CREATED',
+            before: null,
+            after: {
+              status: 'PENDING',
+            },
+            performedBy: {
+              userId: 'USER-001',
+              name: 'Admin',
+            },
+            metadata: {
+              ip: '127.0.0.1',
+            },
+            createdAt: '2026-04-11T10:00:00Z',
+          },
+        ],
+      },
+    },
+    INQUIRY.FETCHED,
+  )
+  @ApiNotFoundResponse()
   async findOne(@Param('inquiryId') inquiryId: string) {
     return this.service.findByInquiryId(inquiryId);
   }
 
   /**
    * Update Inquiry
-   * ---------------
    */
   @Permissions('INQUIRY_UPDATE')
   @Patch(':inquiryId')
+  @ApiOperation({ summary: 'Update inquiry' })
   @ApiParam({ name: 'inquiryId', description: 'Inquiry inquiryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: INQUIRY.UPDATED,
+      data: {
+        acknowledged: true,
+        matchedCount: 1,
+        modifiedCount: 0,
+        upsertedCount: 0,
+        upsertedId: null,
+      },
+    },
+    INQUIRY.UPDATED,
+  )
+  @ApiNotFoundResponse()
   async update(@Param('inquiryId') inquiryId: string, @Body() dto: UpdateInquiryDto) {
     return this.service.update(inquiryId, dto);
   }
 
   /**
    * Delete Inquiry
-   * ---------------
    */
   @Permissions('INQUIRY_DELETE')
   @Delete(':inquiryId')
+  @ApiOperation({ summary: 'Delete inquiry' })
   @ApiParam({ name: 'inquiryId', description: 'Inquiry inquiryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: INQUIRY.DELETED,
+      data: {
+        inquiryId: 'INQ00001',
+        status: 'INACTIVE',
+      },
+    },
+    INQUIRY.DELETED,
+  )
+  @ApiNotFoundResponse()
   async delete(@Param('inquiryId') inquiryId: string) {
     return this.service.delete(inquiryId);
   }

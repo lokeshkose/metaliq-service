@@ -1,17 +1,18 @@
 import { Schema } from 'mongoose';
 import { RequestContextStore } from 'src/core/context/request-context';
 import { AuditAction } from 'src/shared/enums/app.enums';
+import isEqual from 'lodash/isEqual';
 
 const IGNORED_FIELDS = ['updatedAt', 'createdAt', '__v'];
 
 export const auditPlugin = (schema: Schema, extra: { entity: string; primaryKey: string }) => {
   const { entity, primaryKey } = extra;
+
   /* ======================================================
    * CREATE (save)
    * ====================================================== */
   schema.post('save', function (doc: any) {
     const ctx = RequestContextStore.get();
-
     if (!ctx?.userId) return;
 
     const AuditLog = (doc.constructor as any).db.model('AuditLog');
@@ -22,7 +23,7 @@ export const auditPlugin = (schema: Schema, extra: { entity: string; primaryKey:
       action: AuditAction.CREATE,
       after: doc.toObject(),
       performedBy: buildUser(ctx),
-    }).catch((error) => console.log(error));
+    }).catch(() => null);
   });
 
   /* ======================================================
@@ -30,32 +31,26 @@ export const auditPlugin = (schema: Schema, extra: { entity: string; primaryKey:
    * ====================================================== */
   schema.post('insertMany', function (docs: any[]) {
     const ctx = RequestContextStore.get();
-
-    console.log(ctx.userId);
-    console.log(ctx.name);
     if (!ctx?.userId || !Array.isArray(docs)) return;
 
     const AuditLog = (docs[0]?.constructor as any).db.model('AuditLog');
 
     const logs = docs.map((doc) => ({
       entity,
-      entityId: doc.customerId || doc.employeeId || doc._id.toString(),
+      entityId: doc[primaryKey] || doc._id.toString(),
       action: AuditAction.CREATE,
       after: doc,
       performedBy: buildUser(ctx),
     }));
 
     AuditLog.insertMany(logs).catch(() => null);
-  } as any); // ✅ IMPORTANT FIX
+  } as any);
 
   /* ======================================================
-   * PRE UPDATE (shared)
+   * PRE UPDATE
    * ====================================================== */
   async function preUpdate(this: any) {
     const ctx = RequestContextStore.get();
-
-    console.log(ctx.userId);
-    console.log(ctx.name);
     if (!ctx?.userId) return;
 
     const update: any = this.getUpdate();
@@ -65,59 +60,76 @@ export const auditPlugin = (schema: Schema, extra: { entity: string; primaryKey:
 
     if (!keys.length) return;
 
-    const original = await this.model.find(this.getQuery()).lean();
-    if (!original?.length) return;
+    const originalDocs = await this.model.find(this.getQuery()).lean();
+    if (!originalDocs?.length) return;
 
-    (this as any)._auditBefore = original.map((doc: any) => {
+    (this as any)._auditBefore = originalDocs.map((doc: any) => {
       const before: any = {};
-      for (const k of keys) {
-        before[k] = doc[k];
+
+      for (const key of keys) {
+        before[key] = doc[key];
       }
+
       return {
-        entityId: doc.customerId || doc.employeeId || doc._id.toString(),
+        entityId: doc[primaryKey] || doc._id.toString(),
         before,
       };
     });
   }
 
   /* ======================================================
-   * POST UPDATE (shared)
+   * POST UPDATE
    * ====================================================== */
   function postUpdate(this: any) {
     const ctx = RequestContextStore.get();
-
-    console.log(ctx.userId);
-    console.log(ctx.name);
     if (!ctx?.userId) return;
 
     const update: any = this.getUpdate();
     const set = update?.$set ?? update ?? {};
 
-    const after = Object.fromEntries(
+    const filteredAfter = Object.fromEntries(
       Object.entries(set).filter(([k]) => !IGNORED_FIELDS.includes(k)),
     );
 
-    if (!Object.keys(after).length) return;
+    if (!Object.keys(filteredAfter).length) return;
 
     const AuditLog = (this.model as any).db.model('AuditLog');
-
     const beforeData = (this as any)._auditBefore || [];
 
-    const logs = beforeData.map((item: any) => ({
-      entity,
-      entityId: item.entityId,
+    const logs = beforeData
+      .map((item: any) => {
+        const changedBefore: any = {};
+        const changedAfter: any = {};
 
-      action:
-        after.isDeleted === true
-          ? AuditAction.DELETE
-          : after.isDeleted === false
-            ? AuditAction.RESTORE
-            : AuditAction.UPDATE,
+        for (const key of Object.keys(filteredAfter)) {
+          if (!isEqual(item.before[key], filteredAfter[key])) {
+            changedBefore[key] = item.before[key];
+            changedAfter[key] = filteredAfter[key];
+          }
+        }
 
-      before: item.before,
-      after,
-      performedBy: buildUser(ctx),
-    }));
+        // 🚫 Skip if no real change
+        if (Object.keys(changedAfter).length === 0) {
+          return null;
+        }
+
+        return {
+          entity,
+          entityId: item.entityId,
+
+          action:
+            changedAfter.isDeleted === true
+              ? AuditAction.DELETE
+              : changedAfter.isDeleted === false
+                ? AuditAction.RESTORE
+                : AuditAction.UPDATE,
+
+          before: changedBefore,
+          after: changedAfter,
+          performedBy: buildUser(ctx),
+        };
+      })
+      .filter(Boolean);
 
     if (logs.length) {
       AuditLog.insertMany(logs).catch(() => null);
@@ -125,7 +137,7 @@ export const auditPlugin = (schema: Schema, extra: { entity: string; primaryKey:
   }
 
   /* ======================================================
-   * UPDATE HOOKS
+   * HOOKS
    * ====================================================== */
   schema.pre('updateOne', preUpdate);
   schema.post('updateOne', postUpdate);

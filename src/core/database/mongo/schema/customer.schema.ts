@@ -33,6 +33,7 @@ export class Customer {
     lowercase: true,
     type: String,
     index: true,
+    default: null,
   })
   email?: string;
 
@@ -49,10 +50,11 @@ export class Customer {
     uppercase: true,
     type: String,
     index: true,
+    default: null,
   })
   gstNumber?: string;
 
-  @Prop({ trim: true, type: String })
+  @Prop({ trim: true, type: String, default: null })
   companyName?: string;
 
   /* ======================================================

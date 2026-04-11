@@ -16,11 +16,12 @@ import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
 
 import { UserService } from '../user/user.service';
-import { UserType } from 'src/shared/enums/user.enums';
+import { UserStatus, UserType } from 'src/shared/enums/user.enums';
 import { InjectModel } from '@nestjs/mongoose';
 import { Inquiry } from 'src/core/database/mongo/schema/inquiry.schema';
 import { Model } from 'mongoose';
 import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
+import { CustomerStatus } from 'src/shared/enums/customer.enums';
 
 @Injectable()
 export class CustomerService extends MongoRepository<Customer> {
@@ -70,12 +71,18 @@ export class CustomerService extends MongoRepository<Customer> {
             {
               ...payload,
               isDeleted: false,
-              status: 'ACTIVE',
+              status: CustomerStatus.ACTIVE,
             },
             { session },
           );
 
           customerId = existing.customerId;
+          await this.userService.updateOne(
+            { profileId: customerId },
+            {
+              status: UserStatus.ACTIVE,
+            },
+          );
         } else if (existing) {
           throw new ConflictException(CUSTOMER.DUPLICATE);
         } else {
@@ -180,11 +187,24 @@ export class CustomerService extends MongoRepository<Customer> {
           dto.lastName = TextNormalizer.normalize(dto.lastName, NormalizeType.TITLE);
         }
 
+        /* ======================================================
+         * 🔥 HANDLE STATUS CHANGE
+         * ====================================================== */
+        if (dto.status) {
+          await this.userService.updateOne(
+            { profileId: customerId },
+            { status: dto.status },
+            { session },
+          );
+
+          /* ---------- IF INACTIVE → LOGOUT ---------- */
+          if (dto.status === CustomerStatus.INACTIVE) {
+            await this.userService.logoutByProfileId(customerId, session);
+          }
+        }
+
         /* ---------- UPDATE ---------- */
-        const doc = await this.updateOne({ customerId }, dto, {
-          session,
-          new: true,
-        });
+        const doc = await this.updateOne({ customerId }, dto, { session, new: true });
 
         if (!doc) {
           throw new NotFoundException(CUSTOMER.NOT_FOUND);
@@ -205,19 +225,48 @@ export class CustomerService extends MongoRepository<Customer> {
    * DELETE (SOFT)
    * ====================================================== */
   async delete(customerId: string) {
-    const existing = await this.findOne({ customerId });
+    return this.withTransaction(async (session) => {
+      /* ======================================================
+       * 🔍 FIND CUSTOMER
+       * ====================================================== */
+      const existing = await this.findOne({ customerId }, { session });
 
-    if (!existing) {
-      throw new NotFoundException(CUSTOMER.NOT_FOUND);
-    }
+      if (!existing) {
+        throw new NotFoundException(CUSTOMER.NOT_FOUND);
+      }
 
-    await this.softDelete({ customerId });
+      /* ======================================================
+       * 🔍 FIND USER (BY PROFILE ID)
+       * ====================================================== */
+      const user: any = await this.userService.findOne({ profileId: customerId }, { session });
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: CUSTOMER.DELETED,
-      data: existing,
-    };
+      if (user) {
+        /* ======================================================
+         * 🔥 LOGOUT USER
+         * ====================================================== */
+        await this.userService.logoutByProfileId(customerId, session);
+
+        /* ======================================================
+         * 🚫 DEACTIVATE USER
+         * ====================================================== */
+        await this.userService.updateOne(
+          { profileId: customerId },
+          { status: UserStatus.INACTIVE },
+          { session },
+        );
+      }
+
+      /* ======================================================
+       * 🗑 SOFT DELETE CUSTOMER
+       * ====================================================== */
+      await this.softDelete({ customerId }, { session });
+
+      return {
+        statusCode: HttpStatus.OK,
+        message: CUSTOMER.DELETED,
+        data: existing,
+      };
+    });
   }
 
   async getKpi(query: { customerId?: string }) {

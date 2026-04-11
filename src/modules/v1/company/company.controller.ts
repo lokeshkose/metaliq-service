@@ -1,18 +1,5 @@
 /**
  * Company Controller
- * -------------------
- * Purpose : Exposes APIs for managing companys
- * Used by : WEB / MOBILE / ADMIN PANEL
- *
- * Responsibilities:
- * - Create companys
- * - Fetch companys with filters & pagination
- * - Retrieve individual company details
- * - Update company
- * - Soft delete companys
- *
- * Notes:
- * - Companys act as master reference data
  */
 
 import {
@@ -62,57 +49,160 @@ export class CompanyController {
 
   /**
    * Create Company
-   * --------------
    */
   @Permissions('COMPANY_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create company' })
   @ApiBody({ type: CreateCompanyDto })
-  @ApiSuccessResponse({ companyId: 'COMP-001' }, COMPANY.CREATED, HttpStatus.CREATED)
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 201,
+      message: COMPANY.CREATED,
+      data: {
+        companyId: 'COMP-001',
+      },
+    },
+    COMPANY.CREATED,
+    HttpStatus.CREATED,
+  )
   async create(@Body() dto: CreateCompanyDto) {
     return this.service.create(dto);
   }
 
   /**
-   * Get Companys
-   * ------------
+   * Get Companies
    */
   @Get()
   @Permissions('COMPANY_VIEW')
+  @ApiOperation({ summary: 'Get company list with pagination' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: COMPANY.FETCHED,
+      data: [
+        {
+          companyId: 'COMP-001',
+          name: 'ABC Pvt Ltd',
+          description: 'Manufacturing company',
+          email: 'abc@mail.com',
+          mobile: '9876543210',
+          gstNumber: '22ABCDE1234F1Z5',
+          address: {
+            line1: 'Street 1',
+            line2: 'Area',
+            city: 'Indore',
+            state: 'MP',
+            country: 'India',
+            pincode: '452001',
+          },
+          services: ['Logistics'],
+          courses: ['Training'],
+          status: 'ACTIVE',
+        },
+      ],
+      meta: {
+        totalItems: 100,
+        currentPage: 1,
+        totalPages: 5,
+        itemsPerPage: 20,
+      },
+    },
+    COMPANY.FETCHED,
+  )
   async findAll(@Query() query: CompanyQueryDto) {
     return this.service.findAll(query);
   }
 
   /**
    * Get Company by ID
-   * -----------------
    */
   @Permissions('COMPANY_VIEW')
   @Get(':companyId')
+  @ApiOperation({ summary: 'Get company by ID' })
   @ApiParam({ name: 'companyId', description: 'Company companyId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: COMPANY.FETCHED,
+      data: {
+        companyId: 'COMP-001',
+        name: 'ABC Pvt Ltd',
+        description: 'Manufacturing company',
+        email: 'abc@mail.com',
+        mobile: '9876543210',
+        gstNumber: '22ABCDE1234F1Z5',
+        address: {
+          line1: 'Street 1',
+          line2: 'Area',
+          city: 'Indore',
+          state: 'MP',
+          country: 'India',
+          pincode: '452001',
+        },
+        services: ['Logistics'],
+        courses: ['Training'],
+        status: 'ACTIVE',
+      },
+    },
+    COMPANY.FETCHED,
+  )
+  @ApiNotFoundResponse()
   async findOne(@Param('companyId') companyId: string) {
     return this.service.findByCompanyId(companyId);
   }
 
   /**
    * Update Company
-   * ---------------
    */
   @Permissions('COMPANY_UPDATE')
   @Patch(':companyId')
+  @ApiOperation({ summary: 'Update company' })
   @ApiParam({ name: 'companyId', description: 'Company companyId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: COMPANY.UPDATED,
+      data: {
+        acknowledged: true,
+        matchedCount: 1,
+        modifiedCount: 0,
+        upsertedCount: 0,
+        upsertedId: null,
+      },
+    },
+    COMPANY.UPDATED,
+  )
+  @ApiNotFoundResponse()
   async update(@Param('companyId') companyId: string, @Body() dto: UpdateCompanyDto) {
     return this.service.update(companyId, dto);
   }
 
   /**
    * Delete Company
-   * ---------------
    */
   @Permissions('COMPANY_DELETE')
   @Delete(':companyId')
+  @ApiOperation({ summary: 'Delete company' })
   @ApiParam({ name: 'companyId', description: 'Company companyId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: COMPANY.DELETED,
+      data: {
+        companyId: 'COMP-001',
+        name: 'ABC Pvt Ltd',
+        status: 'INACTIVE',
+      },
+    },
+    COMPANY.DELETED,
+  )
+  @ApiNotFoundResponse()
   async delete(@Param('companyId') companyId: string) {
     return this.service.delete(companyId);
   }

@@ -1,77 +1,143 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsEnum, IsDate } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsDate,
+  Min,
+  Length,
+} from 'class-validator';
 import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 export class CreateInquiryDto {
-  /**
-   * CreateInquiryDto
-   * =================
-   * DTO for creating Inquiry
-   */
-  @ApiPropertyOptional({ type: String })
+  /* ======================================================
+   * PRODUCT
+   * ====================================================== */
+
+  @ApiProperty({ example: 'PROD001' })
   @IsNotEmpty()
   @IsString()
-  productId?: string;
+  @Length(2, 50)
+  productId!: string;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiProperty({ example: 'Apple' })
   @IsNotEmpty()
   @IsString()
-  productName?: string;
+  @Length(2, 100)
+  productName!: string;
 
-  @ApiPropertyOptional({ type: String })
+  /* ======================================================
+   * CUSTOMER
+   * ====================================================== */
+
+  @ApiProperty({ example: 'CUST001' })
   @IsNotEmpty()
   @IsString()
-  customerId?: string;
+  customerId!: string;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiProperty({ example: 'John Doe' })
   @IsNotEmpty()
   @IsString()
-  customerName?: string;
+  @Length(2, 100)
+  customerName!: string;
 
-  @ApiPropertyOptional({ type: String })
+  /* ======================================================
+   * INQUIRY DETAILS
+   * ====================================================== */
+
+  @ApiProperty({ example: 'Bulk purchase requirement' })
   @IsNotEmpty()
   @IsString()
-  purpose?: string;
+  @Length(3, 200)
+  purpose!: string;
 
-  @ApiPropertyOptional({ type: Number })
+  /* ======================================================
+   * PRICING
+   * ====================================================== */
+
+  @ApiProperty({ example: 100 })
+  @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
-  basePrice?: number;
+  @Min(0)
+  basePrice!: number;
 
-  @ApiPropertyOptional({ type: Number })
+  @ApiProperty({ example: 5000 })
+  @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
-  estimatedValue?: number;
+  @Min(0)
+  estimatedValue!: number;
 
-  @ApiPropertyOptional({ type: Number })
+  @ApiProperty({ example: 120 })
+  @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
-  customerPrice?: number;
+  @Min(0)
+  customerPrice!: number;
 
-  @ApiPropertyOptional({ type: Number })
+  @ApiPropertyOptional({ example: 110 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offeredPrice?: number;
+
+  /* ======================================================
+   * QUANTITY
+   * ====================================================== */
+
+  @ApiProperty({ example: 50 })
+  @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
-  customerQuantity?: number;
+  @Min(1)
+  customerQuantity!: number;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({ example: 40 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  offeredQuantity?: number;
+
+  /* ======================================================
+   * OTHER INFO
+   * ====================================================== */
+
+  @ApiPropertyOptional({ example: 'Urgent requirement' })
   @IsOptional()
   @IsString()
+  @Length(0, 300)
   remark?: string;
 
-  // @ApiPropertyOptional({ type: String })
-  // @IsOptional()
-  // @IsString()
-  // comments?: string;
+  @ApiPropertyOptional({ example: 'Customer prefers fast delivery' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  comments?: string;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiProperty({ example: 'Mumbai' })
   @IsNotEmpty()
   @IsString()
-  deliveryCity?: string;
+  @Length(2, 100)
+  deliveryCity!: string;
 
-  @ApiProperty({ type: Date })
+  @ApiProperty({ example: '2026-04-20T00:00:00.000Z' })
   @IsNotEmpty()
   @Type(() => Date)
   @IsDate()
   deliveryRequiredBy!: Date;
+
+  /* ======================================================
+   * STATUS
+   * ====================================================== */
+
+  @ApiPropertyOptional({ enum: InquiryStatus })
+  @IsOptional()
+  @IsEnum(InquiryStatus)
+  status?: InquiryStatus;
 }

@@ -106,18 +106,14 @@ export class UserService extends MongoRepository<User> {
     }
   }
 
-  /* ======================================================
-   * LOGIN
-   * ====================================================== */
   async login(body: LoginDto, sessionId: string, deviceId: string, ipAddress?: string) {
-    const { loginId, password, deviceInfo } = body;
+    const { loginId, password, deviceInfo, forceLogin } = body;
 
     if (!deviceInfo) {
       throw new BadRequestException('Device info missing');
     }
 
     const user: any = await this.findOneWithSelect({ loginId }, '+password');
-    console.log(user);
 
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException(USER.INVALID_CREDENTIALS);
@@ -134,11 +130,6 @@ export class UserService extends MongoRepository<User> {
     }
 
     /* ---------- ROLE ---------- */
-    // const role = await this.roleService.findOne({
-    //   roleId: profile.roleId,
-    //   isDeleted: false,
-    // });
-
     const role = {
       roleId: 'TEST123',
       name: 'TEMP',
@@ -148,6 +139,46 @@ export class UserService extends MongoRepository<User> {
 
     if (!role) throw new ForbiddenException('Role not found');
     if (role.status !== Status.ACTIVE) throw new ForbiddenException('Role inactive');
+
+    /* ======================================================
+     * 🚨 SINGLE DEVICE CHECK (USING HELPER)
+     * ====================================================== */
+
+    const existingSession: any = await this.redis.getUserSession(user.userId);
+
+    if (existingSession) {
+      const {
+        sessionId: oldSessionId,
+        deviceId: oldDeviceId,
+        deviceName,
+        platform,
+        lastLoginAt,
+      } = existingSession;
+
+      if (oldDeviceId !== deviceId) {
+        if (!forceLogin) {
+          throw new ForbiddenException({
+            code: 'ALREADY_LOGGED_IN',
+            message:
+              'You are already logged in on another device. Do you want to logout from that device?',
+            device: {
+              deviceId: oldDeviceId,
+              deviceName,
+              platform,
+              lastLoginAt,
+            },
+          });
+        }
+
+        /* ---------- FORCE LOGIN ---------- */
+        await this.redis.deleteSession(oldSessionId);
+
+        await this.deviceService.update(
+          { userId: user.userId, deviceId: oldDeviceId },
+          { status: DeviceStatus.INACTIVE },
+        );
+      }
+    }
 
     /* ---------- DEVICE ---------- */
     await this.deviceService.update(
@@ -177,7 +208,7 @@ export class UserService extends MongoRepository<User> {
 
     /* ---------- SESSION ---------- */
     const sessionData = {
-      type: 'USER',
+      type: user.userType,
       userId: user.userId,
       profileId: user.profileId,
 
@@ -197,18 +228,26 @@ export class UserService extends MongoRepository<User> {
       createdAt: new Date().toISOString(),
     };
 
-    const res = await this.redis.setJson(
-      `session:${sessionId}`,
-      sessionData,
+    await this.redis.setSession(sessionId, sessionData, Session.EXPIRED_IN_MS);
+
+    /* ---------- SAVE ACTIVE SESSION ---------- */
+    await this.redis.setUserSession(
+      user.userId,
+      {
+        sessionId,
+        deviceId,
+        deviceName: deviceInfo?.deviceType || 'Unknown Device',
+        platform: deviceInfo?.os || 'Unknown',
+        lastLoginAt: new Date().toISOString(),
+      },
       Session.EXPIRED_IN_MS,
     );
-    console.log(res, '===========res=============');
 
     /* ---------- REFRESH TOKEN ---------- */
     const refreshToken = randomUUID();
 
-    await this.redis.setJson(
-      `refresh:${sessionId}`,
+    await this.redis.setRefreshToken(
+      sessionId,
       {
         hash: await bcrypt.hash(refreshToken, 10),
         deviceId,
@@ -291,32 +330,64 @@ export class UserService extends MongoRepository<User> {
     };
   }
 
-  /* ======================================================
-   * LOGOUT
-   * ====================================================== */
   async logout(req: any, res: Response, deviceId: string) {
     const sessionId = req.sessionId;
+    const userId = req.user?.userId;
 
-    if (!sessionId) {
+    if (!sessionId || !userId) {
       throw new UnauthorizedException(USER.SESSION_EXPIRED);
     }
 
     await Promise.all([
-      this.redis.delete(`session:${sessionId}`),
-      this.redis.delete(`refresh:${sessionId}`),
-      this.deviceService.update(
-        { userId: req.user.userId, deviceId },
-        { status: DeviceStatus.INACTIVE },
-      ),
+      this.redis.deleteSession(sessionId),
+      this.redis.deleteUserSession(userId),
+      this.deviceService.update({ userId, deviceId }, { status: DeviceStatus.INACTIVE }),
     ]);
 
+    /* ---------- CLEAR COOKIES ---------- */
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
     res.clearCookie('sessionId');
 
     return {
+      statusCode: HttpStatus.OK, // ✅ add this (important for interceptor)
       message: USER.LOGOUT,
-      statusCode: HttpStatus.OK,
+    };
+  }
+
+  async logoutByProfileId(profileId: string, mongoSession: ClientSession) {
+    /* ======================================================
+     * 🔍 GET ACTIVE SESSION
+     * ====================================================== */
+    const user = await this.findOne({
+      profileId,
+    });
+    const userId: any = user?.userId;
+    const session: any = await this.redis.getUserSession(userId);
+
+    if (!session) return;
+
+    /* ======================================================
+     * 🔥 DELETE SESSION + MAPPING
+     * ====================================================== */
+    await Promise.all([
+      this.redis.deleteSession(session.sessionId),
+      this.redis.deleteUserSession(userId),
+    ]);
+
+    /* ======================================================
+     * 📱 OPTIONAL: MARK DEVICE INACTIVE
+     * ====================================================== */
+    if (session.deviceId) {
+      await this.deviceService.update(
+        { userId, deviceId: session.deviceId },
+        { status: DeviceStatus.INACTIVE },
+        { session: mongoSession },
+      );
+    }
+
+    return {
+      message: USER.LOGOUT,
     };
   }
 
@@ -366,7 +437,7 @@ export class UserService extends MongoRepository<User> {
     }
 
     /* ======================================================
-     * GET PROFILE (BASED ON TYPE)
+     * GET PROFILE
      * ====================================================== */
     let profile: any;
 
@@ -396,19 +467,27 @@ export class UserService extends MongoRepository<User> {
     }
 
     /* ======================================================
+     * 🔐 REMOVE OLD RESET TOKENS (IMPORTANT)
+     * ====================================================== */
+    // optional cleanup (if you track multiple tokens)
+    // await this.redis.delete(`reset_user:${user.userId}`);
+
+    /* ======================================================
      * GENERATE TOKEN
      * ====================================================== */
     const token = randomUUID();
 
     /* ======================================================
-     * STORE TOKEN IN REDIS
+     * STORE TOKEN IN REDIS (TTL IN SECONDS)
      * ====================================================== */
+    const TTL_SECONDS = 10 * 60; // ✅ FIXED (10 minutes)
+
     await this.redis.setJson(
       `reset:${token}`,
       {
         userId: user.userId,
       },
-      10 * 60 * 1000, // 10 min
+      TTL_SECONDS,
     );
 
     /* ======================================================
@@ -420,42 +499,57 @@ export class UserService extends MongoRepository<User> {
      * SEND EMAIL
      * ====================================================== */
     await this.mailService.sendMail({
-      to: profile.email, // ✅ FROM PROFILE
+      to: profile.email,
       subject: 'Reset Password',
       html: `
       <h3>Reset Your Password</h3>
-      <p>Click below:</p>
+      <p>Hello ${profile.name || 'User'},</p>
+      <p>Click the link below to reset your password:</p>
       <a href="${link}">${link}</a>
-      <p>Valid for 10 minutes</p>
+      <p>This link will expire in <b>10 minutes</b>.</p>
+      <p>If you did not request this, please ignore this email.</p>
     `,
     });
 
     return {
-      statusCode: HttpStatus.OK,
       message: 'Reset link sent to registered email',
     };
   }
 
   async resetPassword(token: string, password: string) {
+    /* ---------- GET RESET TOKEN DATA ---------- */
     const data = await this.redis.getJson<any>(`reset:${token}`);
 
     if (!data) {
       throw new BadRequestException('Invalid or expired link');
     }
 
+    /* ---------- HASH PASSWORD ---------- */
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    /* ---------- UPDATE USER ---------- */
     const updated = await this.updateOne({ userId: data.userId }, { password: hashedPassword });
 
     if (!updated) {
       throw new NotFoundException('User not found');
     }
 
+    /* ======================================================
+     * 🔥 SECURITY: LOGOUT ACTIVE SESSION (IMPORTANT)
+     * ====================================================== */
+
+    const existingSession: any = await this.redis.getUserSession(data.userId);
+
+    if (existingSession) {
+      await this.redis.deleteSession(existingSession.sessionId);
+      await this.redis.deleteUserSession(data.userId);
+    }
+
+    /* ---------- DELETE RESET TOKEN ---------- */
     await this.redis.delete(`reset:${token}`);
 
     return {
-      statusCode: HttpStatus.OK,
-      message: 'Password reset successful',
+      message: USER.PASSWORD_RESET,
     };
   }
 }

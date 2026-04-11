@@ -6,6 +6,12 @@ import { softDeletePlugin } from '../database/mongo/plugins/soft-delete.plugin';
 import { auditPlugin } from '../database/mongo/plugins/audit-logs.plugin';
 import { EmployeeSchema } from '../database/mongo/schema/employee.schema';
 import { RoleSchema } from '../database/mongo/schema/role.schema';
+import { InquirySchema } from '../database/mongo/schema/inquiry.schema';
+import { PriceSchema } from '../database/mongo/schema/price.schema';
+import { ProductSchema } from '../database/mongo/schema/product.schema';
+import { ProductCategorySchema } from '../database/mongo/schema/product-category.schema';
+import { DeviceSchema } from '../database/mongo/schema/device.schema';
+import { UserSchema } from '../database/mongo/schema/user.schema';
 
 export const mongoConfig = (uri: string, logger: LoggerService): MongooseModuleOptions => ({
   uri,
@@ -25,8 +31,17 @@ export const mongoConfig = (uri: string, logger: LoggerService): MongooseModuleO
     connection.plugin(timestampsPlugin);
     connection.plugin(softDeletePlugin);
     EmployeeSchema.plugin(auditPlugin, { entity: 'employees', primaryKey: 'employeeId' });
+    InquirySchema.plugin(auditPlugin, { entity: 'inquires', primaryKey: 'inquiryId' });
+    PriceSchema.plugin(auditPlugin, { entity: 'price_master', primaryKey: 'priceId' });
+    ProductCategorySchema.plugin(auditPlugin, {
+      entity: 'product_categories',
+      primaryKey: 'categoryId',
+    });
+    ProductSchema.plugin(auditPlugin, { entity: 'product_master', primaryKey: 'productId' });
     RoleSchema.plugin(auditPlugin, { entity: 'roles', primaryKey: 'roleId' });
-
+    DeviceSchema.plugin(auditPlugin, { entity: 'devices', primaryKey: 'deviceId' });
+    UserSchema.plugin(auditPlugin, { entity: 'users', primaryKey: 'userId' });
+    UserSchema.plugin(auditPlugin, { entity: 'company_master', primaryKey: 'companyId' });
     logger.info(`MongoDB initial readyState: ${connection.readyState}`);
 
     connection.once('open', () => {

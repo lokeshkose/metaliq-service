@@ -22,7 +22,7 @@ export class Company {
   @Prop({ required: true, trim: true, type: String, index: true })
   name!: string;
 
-  @Prop({ trim: true, type: String })
+  @Prop({ trim: true, type: String, default: null })
   description?: string;
 
   /* ======================================================
@@ -34,6 +34,7 @@ export class Company {
     lowercase: true,
     type: String,
     index: true,
+    default: null,
   })
   email?: string;
 
@@ -50,6 +51,7 @@ export class Company {
     uppercase: true,
     type: String,
     index: true,
+    default: null,
   })
   gstNumber?: string;
 

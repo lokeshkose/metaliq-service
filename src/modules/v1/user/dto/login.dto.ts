@@ -24,6 +24,7 @@ import {
   ValidateNested,
   IsOptional,
   IsIn,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -164,7 +165,7 @@ export class LoginDto {
    * - Customer code
    */
   @ApiProperty({
-    example: 'EMP00123',
+    example: '9999999999',
     description: 'Login ID / Username / Employee or Customer Code',
   })
   @IsString({ message: 'Login ID must be a string' })
@@ -183,13 +184,23 @@ export class LoginDto {
    * - Securely hashed internally
    */
   @ApiProperty({
-    example: 'Passw0rd@123',
+    example: '123456789',
     description: 'User password',
   })
   @IsString({ message: 'Password must be a string' })
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(6, { message: 'Password must be at least 6 characters' })
   password!: string;
+
+  @ApiProperty({
+    example: false,
+    default: false,
+    type: Boolean,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  forceLogin?: boolean;
 
   /**
    * Device Information

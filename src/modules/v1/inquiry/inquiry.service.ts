@@ -10,7 +10,6 @@ import { INQUIRY } from './inquiry.constants';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
 import { InquiryQueryDto } from './dto/inquiry-query.dto';
-import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { InquiryStatus } from 'src/shared/enums/inquiry.enums';
 
 @Injectable()
@@ -81,37 +80,124 @@ export class InquiryService extends MongoRepository<Inquiry> {
   async findAll(query: InquiryQueryDto) {
     const { searchText, status, page = 1, limit = 20 } = query;
 
-    const filter: FilterQuery<Inquiry> = {};
+    const match: any = {};
 
-    if (status) filter.status = status;
+    if (status) match.status = status;
 
     if (query.customerId) {
-      filter.customerId = query.customerId;
+      match.customerId = query.customerId;
     }
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
 
-      filter.$or = [{ inquiryId: regex }, { customerName: regex }];
+      match.$or = [{ inquiryId: regex }, { customerName: regex }];
     }
 
-    const result = await this.paginate(filter, {
-      page,
-      limit,
-      sort: { createdAt: -1 },
-      lean: true,
-    });
+    const skip = (page - 1) * limit;
+
+    const data = await this.model.aggregate([
+      { $match: match },
+
+      { $sort: { createdAt: -1 } },
+
+      { $skip: skip },
+      { $limit: limit },
+
+      /* ======================================================
+       * 🔗 TIMELINE (AUDIT LOGS JOIN)
+       * ====================================================== */
+      {
+        $lookup: {
+          from: 'audit_logs',
+          let: { inquiryId: '$inquiryId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ['$entityId', '$$inquiryId'] }, { $eq: ['$entity', 'inquires'] }],
+                },
+              },
+            },
+            { $sort: { createdAt: 1 } },
+
+            /* Optional: limit timeline size */
+            { $limit: 10 },
+
+            /* Optional: clean response */
+            {
+              $project: {
+                action: 1,
+                before: 1,
+                after: 1,
+                performedBy: 1,
+                metadata: 1,
+                createdAt: 1,
+              },
+            },
+          ],
+          as: 'timeline',
+        },
+      },
+    ]);
+
+    const total = await this.model.countDocuments(match);
 
     return {
       statusCode: HttpStatus.OK,
       message: INQUIRY.FETCHED,
-      data: result.items,
-      meta: result.meta,
+      data,
+      meta: {
+        totalItems: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        itemsPerPage: limit,
+      },
     };
   }
 
   async findByInquiryId(inquiryId: string) {
-    const doc = await this.findOne({ inquiryId }, { lean: true });
+    const result = await this.model.aggregate([
+      {
+        $match: { inquiryId },
+      },
+
+      { $limit: 1 },
+
+      /* ======================================================
+       * 🔗 TIMELINE (AUDIT LOGS)
+       * ====================================================== */
+      {
+        $lookup: {
+          from: 'audit_logs',
+          let: { inquiryId: '$inquiryId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ['$entityId', '$$inquiryId'] }, { $eq: ['$entity', 'inquires'] }],
+                },
+              },
+            },
+            { $sort: { createdAt: 1 } },
+            /* Optional: clean response */
+            {
+              $project: {
+                action: 1,
+                before: 1,
+                after: 1,
+                performedBy: 1,
+                metadata: 1,
+                createdAt: 1,
+              },
+            },
+          ],
+          as: 'timeline',
+        },
+      },
+    ]);
+
+    const doc = result[0];
 
     if (!doc) throw new NotFoundException(INQUIRY.NOT_FOUND);
 

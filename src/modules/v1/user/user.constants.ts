@@ -16,4 +16,5 @@ export const USER = {
   DELETED: 'User deleted successfully',
   AGENT_MISSED: 'Invalid or missing x-agent header',
   LOGIN: 'User logged in successfully',
+  PASSWORD_RESET: 'Password reset successful',
 };

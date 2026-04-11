@@ -26,23 +26,28 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     const request = context.switchToHttp().getRequest();
 
-    /* ---------- DEVICE VALIDATION (EARLY FAIL) ---------- */
-    const deviceIdHeader = request.headers['x-device-id'];
+    /* ======================================================
+     * 📱 DEVICE ID VALIDATION (EARLY)
+     * ====================================================== */
+    const rawDeviceId = request.headers['x-device-id'];
 
     const deviceId =
-      typeof deviceIdHeader === 'string'
-        ? deviceIdHeader
-        : Array.isArray(deviceIdHeader)
-          ? deviceIdHeader[0]
+      typeof rawDeviceId === 'string'
+        ? rawDeviceId
+        : Array.isArray(rawDeviceId)
+          ? rawDeviceId[0]
           : null;
 
     if (!deviceId) {
       throw new UnauthorizedException('Device ID missing');
     }
 
-    request.deviceId = deviceId; // attach early
+    /* attach for strategy + controllers */
+    request.deviceId = deviceId;
 
-    /* ---------- JWT VALIDATION ---------- */
+    /* ======================================================
+     * 🔐 JWT VALIDATION (Passport)
+     * ====================================================== */
     const isActivated = (await super.canActivate(context)) as boolean;
 
     if (!isActivated) {
@@ -62,7 +67,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     const request = context.switchToHttp().getRequest();
 
-    /* ---------- FINAL DEVICE MATCH ---------- */
+    /* ======================================================
+     * 🔐 FINAL DEVICE CHECK
+     * ====================================================== */
     if (user.deviceId !== request.deviceId) {
       throw new UnauthorizedException('Device mismatch');
     }

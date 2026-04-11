@@ -123,12 +123,13 @@ export abstract class MongoRepository<T> {
     filter: FilterQuery<T>,
     update: UpdateQuery<T>,
     options?: RepoOptions,
-  ): Promise<boolean> {
+  ): Promise<any> {
     const res = await this.model.updateOne(this.applySoftDelete(filter, options), update as any, {
       session: options?.session,
+      timestamps: false,
     });
 
-    return res.modifiedCount > 0;
+    return res;
   }
 
   async updateById(id: string, update: UpdateQuery<T>, options?: RepoOptions): Promise<boolean> {

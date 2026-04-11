@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsDate, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { DeviceStatus } from 'src/shared/enums/device.enums';
 
 export class CreateDeviceDto {
@@ -8,32 +9,32 @@ export class CreateDeviceDto {
    * =================
    * Data Transfer Object for creating new Device records
    */
-  @ApiProperty({ type: String, description: 'Business identifier for profile' })
+  @ApiProperty({ type: String, description: 'Business identifier for profile', required: true })
   @IsNotEmpty()
   @IsString()
   profileId!: string;
 
-  @ApiProperty({ type: String, description: 'Business identifier for user' })
+  @ApiProperty({ type: String, description: 'Business identifier for user', required: true })
   @IsNotEmpty()
   @IsString()
   userId!: string;
 
-  @ApiProperty({ type: String, description: 'Business identifier for session' })
+  @ApiProperty({ type: String, description: 'Business identifier for session', required: true })
   @IsNotEmpty()
   @IsString()
   sessionId!: string;
 
-  @ApiProperty({ type: String, description: 'Business identifier for device' })
+  @ApiProperty({ type: String, description: 'Business identifier for device', required: true })
   @IsNotEmpty()
   @IsString()
   deviceId!: string;
 
-  @ApiProperty({ type: String })
+  @ApiProperty({ type: String, default: null })
   @IsNotEmpty()
   @IsString()
   deviceType!: string;
 
-  @ApiProperty({ type: String })
+  @ApiProperty({ type: String, default: null })
   @IsNotEmpty()
   @IsString()
   os!: string;
@@ -43,7 +44,7 @@ export class CreateDeviceDto {
    * -------
    * Server-generated session identifier
    */
-  @ApiProperty({ type: String })
+  @ApiProperty({ type: String, default: null })
   @IsNotEmpty()
   @IsString()
   browser!: string;
@@ -53,7 +54,7 @@ export class CreateDeviceDto {
    * ---------
    * Stable client device identifier
    */
-  @ApiProperty({ type: String })
+  @ApiProperty({ type: String, default: null })
   @IsNotEmpty()
   @IsString()
   ipAddress!: string;
@@ -61,14 +62,19 @@ export class CreateDeviceDto {
   @ApiPropertyOptional({
     enum: DeviceStatus,
     example: DeviceStatus.ACTIVE,
-    default: DeviceStatus.ACTIVE,
   })
   @IsOptional()
   @IsEnum(DeviceStatus)
   status?: DeviceStatus;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({ type: String, default: null })
   @IsOptional()
   @IsString()
   fcmToken?: string;
+
+  @ApiProperty({ type: Date })
+  @IsNotEmpty()
+  @Type(() => Date)
+  @IsDate()
+  lastLoginAt!: Date;
 }

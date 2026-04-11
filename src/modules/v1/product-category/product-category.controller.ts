@@ -1,18 +1,5 @@
 /**
  * ProductCategory Controller
- * ---------------------------
- * Purpose : Exposes APIs for managing product-categorys
- * Used by : WEB / MOBILE / ADMIN PANEL
- *
- * Responsibilities:
- * - Create product-categorys
- * - Fetch product-categorys with filters & pagination
- * - Retrieve individual product-category details
- * - Update product-category
- * - Soft delete product-categorys
- *
- * Notes:
- * - ProductCategorys act as master reference data
  */
 
 import {
@@ -62,57 +49,134 @@ export class ProductCategoryController {
 
   /**
    * Create ProductCategory
-   * ----------------------
    */
   @Permissions('PRODUCT_CATEGORY_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create product-category' })
   @ApiBody({ type: CreateProductCategoryDto })
-  @ApiSuccessResponse({ categoryId: 'PROD-001' }, PRODUCT_CATEGORY.CREATED, HttpStatus.CREATED)
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 201,
+      message: PRODUCT_CATEGORY.CREATED,
+      data: {
+        categoryId: 'CAT-001',
+      },
+    },
+    PRODUCT_CATEGORY.CREATED,
+    HttpStatus.CREATED,
+  )
   async create(@Body() dto: CreateProductCategoryDto) {
     return this.service.create(dto);
   }
 
   /**
-   * Get ProductCategorys
-   * --------------------
+   * Get ProductCategories
    */
   @Get()
   @Permissions('PRODUCT_CATEGORY_VIEW')
+  @ApiOperation({ summary: 'Get product-category list with pagination' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: PRODUCT_CATEGORY.FETCHED,
+      data: [
+        {
+          categoryId: 'CAT-001',
+          name: 'Dairy',
+          parentCategoryId: 'CAT-ROOT',
+          status: 'ACTIVE',
+        },
+      ],
+      meta: {
+        totalItems: 100,
+        currentPage: 1,
+        totalPages: 5,
+        itemsPerPage: 20,
+      },
+    },
+    PRODUCT_CATEGORY.FETCHED,
+  )
   async findAll(@Query() query: ProductCategoryQueryDto) {
     return this.service.findAll(query);
   }
 
   /**
    * Get ProductCategory by ID
-   * -------------------------
    */
   @Permissions('PRODUCT_CATEGORY_VIEW')
   @Get(':categoryId')
+  @ApiOperation({ summary: 'Get product-category by ID' })
   @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: PRODUCT_CATEGORY.FETCHED,
+      data: {
+        categoryId: 'CAT-001',
+        name: 'Dairy',
+        parentCategoryId: 'CAT-ROOT',
+        status: 'ACTIVE',
+      },
+    },
+    PRODUCT_CATEGORY.FETCHED,
+  )
+  @ApiNotFoundResponse()
   async findOne(@Param('categoryId') categoryId: string) {
     return this.service.findByCategoryId(categoryId);
   }
 
   /**
    * Update ProductCategory
-   * -----------------------
    */
   @Permissions('PRODUCT_CATEGORY_UPDATE')
   @Patch(':categoryId')
+  @ApiOperation({ summary: 'Update product-category' })
   @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: PRODUCT_CATEGORY.UPDATED,
+      data: {
+        categoryId: 'CAT-001',
+        name: 'Updated Category',
+        status: 'ACTIVE',
+      },
+    },
+    PRODUCT_CATEGORY.UPDATED,
+  )
+  @ApiNotFoundResponse()
   async update(@Param('categoryId') categoryId: string, @Body() dto: UpdateProductCategoryDto) {
     return this.service.update(categoryId, dto);
   }
 
   /**
    * Delete ProductCategory
-   * -----------------------
    */
   @Permissions('PRODUCT_CATEGORY_DELETE')
   @Delete(':categoryId')
+  @ApiOperation({ summary: 'Delete product-category' })
   @ApiParam({ name: 'categoryId', description: 'ProductCategory categoryId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: PRODUCT_CATEGORY.DELETED,
+      data: {
+        acknowledged: true,
+        matchedCount: 1,
+        modifiedCount: 0,
+        upsertedCount: 0,
+        upsertedId: null,
+      },
+    },
+    PRODUCT_CATEGORY.DELETED,
+  )
+  @ApiNotFoundResponse()
   async delete(@Param('categoryId') categoryId: string) {
     return this.service.delete(categoryId);
   }

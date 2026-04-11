@@ -13,6 +13,7 @@ import { CompanyQueryDto } from './dto/company-query.dto';
 import { IdGenerator } from 'src/shared/utils/id-generator.utils';
 import { TextNormalizer } from 'src/shared/utils/text-normalizer.utils';
 import { NormalizeType } from 'src/shared/enums/normalize.enums';
+import { CompanyStatus } from 'src/shared/enums/company.enums';
 
 @Injectable()
 export class CompanyService extends MongoRepository<Company> {
@@ -26,7 +27,9 @@ export class CompanyService extends MongoRepository<Company> {
         if (payload.name) {
           payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
         }
-        const filter: FilterQuery<Company> = {};
+        const filter: FilterQuery<Company> = {
+          name: payload.name,
+        };
 
         const existing = await this.findOne(filter, {
           session,
@@ -42,7 +45,7 @@ export class CompanyService extends MongoRepository<Company> {
             existing._id.toString(),
             {
               ...payload,
-              status: 'ACTIVE',
+              status: CompanyStatus.ACTIVE,
               isDeleted: false,
             },
             { session },
@@ -83,7 +86,7 @@ export class CompanyService extends MongoRepository<Company> {
 
     if (searchText) {
       const regex = new RegExp(searchText, 'i');
-      filter.$or = [{ companyId: regex }];
+      filter.$or = [{ name: regex }];
     }
 
     const result = await this.paginate(filter, {

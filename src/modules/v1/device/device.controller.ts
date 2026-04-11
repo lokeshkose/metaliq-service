@@ -2,17 +2,6 @@
  * Device Controller
  * ------------------
  * Purpose : Exposes APIs for managing devices
- * Used by : WEB / MOBILE / ADMIN PANEL
- *
- * Responsibilities:
- * - Create devices
- * - Fetch devices with filters & pagination
- * - Retrieve individual device details
- * - Update device
- * - Soft delete devices
- *
- * Notes:
- * - Devices act as master reference data
  */
 
 import {
@@ -62,57 +51,136 @@ export class DeviceController {
 
   /**
    * Create Device
-   * -------------
    */
   @Permissions('DEVICE_CREATE')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create device' })
   @ApiBody({ type: CreateDeviceDto })
-  @ApiSuccessResponse({ profileId: 'DEVI-001' }, DEVICE.CREATED, HttpStatus.CREATED)
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 201,
+      message: DEVICE.CREATED,
+      data: {
+        deviceId: 'DEVI-001',
+        name: 'Samsung Tablet',
+        userId: 'USER-001',
+        status: 'ACTIVE',
+      },
+    },
+    DEVICE.CREATED,
+    HttpStatus.CREATED,
+  )
   async create(@Body() dto: CreateDeviceDto) {
     return this.service.create(dto);
   }
 
   /**
    * Get Devices
-   * -----------
    */
   @Get()
   @Permissions('DEVICE_VIEW')
+  @ApiOperation({ summary: 'Get device list with pagination' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: DEVICE.FETCHED,
+      data: [
+        {
+          deviceId: 'DEVI-001',
+          name: 'Samsung Tablet',
+          userId: 'USER-001',
+          status: 'ACTIVE',
+        },
+      ],
+      meta: {
+        totalItems: 50,
+        currentPage: 1,
+        totalPages: 3,
+        itemsPerPage: 20,
+      },
+    },
+    DEVICE.FETCHED,
+  )
   async findAll(@Query() query: DeviceQueryDto) {
     return this.service.findAll(query);
   }
 
   /**
    * Get Device by ID
-   * ----------------
    */
   @Permissions('DEVICE_VIEW')
-  @Get(':profileId')
-  @ApiParam({ name: 'profileId', description: 'Device profileId' })
-  async findOne(@Param('profileId') profileId: string) {
-    return this.service.findByProfileId(profileId);
+  @Get(':deviceId')
+  @ApiOperation({ summary: 'Get device by ID' })
+  @ApiParam({ name: 'deviceId', description: 'Device deviceId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: DEVICE.FETCHED,
+      data: {
+        deviceId: 'DEVI-001',
+        name: 'Samsung Tablet',
+        userId: 'USER-001',
+        status: 'ACTIVE',
+      },
+    },
+    DEVICE.FETCHED,
+  )
+  @ApiNotFoundResponse()
+  async findOne(@Param('deviceId') deviceId: string) {
+    return this.service.findByProfileId(deviceId);
   }
 
   /**
    * Update Device
-   * --------------
    */
   @Permissions('DEVICE_UPDATE')
   @Patch(':deviceId')
-  @ApiParam({ name: 'profileId', description: 'Device profileId' })
-  async update(@Param('profileId') deviceId: string, @Body() dto: UpdateDeviceDto) {
+  @ApiOperation({ summary: 'Update device' })
+  @ApiParam({ name: 'deviceId', description: 'Device deviceId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: DEVICE.UPDATED,
+      data: {
+        acknowledged: true,
+        matchedCount: 1,
+        modifiedCount: 0,
+        upsertedCount: 0,
+        upsertedId: null,
+      },
+    },
+    DEVICE.UPDATED,
+  )
+  @ApiNotFoundResponse()
+  async update(@Param('deviceId') deviceId: string, @Body() dto: UpdateDeviceDto) {
     return this.service.update({ deviceId, userId: '' }, dto);
   }
 
   /**
    * Delete Device
-   * --------------
    */
   @Permissions('DEVICE_DELETE')
   @Delete(':deviceId')
-  @ApiParam({ name: 'deviceId', description: 'Device profileId' })
+  @ApiOperation({ summary: 'Delete device' })
+  @ApiParam({ name: 'deviceId', description: 'Device deviceId' })
+  @ApiSuccessResponse(
+    {
+      success: true,
+      statusCode: 200,
+      message: DEVICE.DELETED,
+      data: {
+        deviceId: 'DEVI-001',
+        status: 'INACTIVE',
+      },
+    },
+    DEVICE.DELETED,
+  )
+  @ApiNotFoundResponse()
   async delete(@Param('deviceId') deviceId: string) {
     return this.service.delete(deviceId);
   }

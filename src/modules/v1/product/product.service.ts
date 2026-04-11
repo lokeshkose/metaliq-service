@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  HttpStatus,
+  BadRequestException,
+} from '@nestjs/common';
 
 import { MongoService } from 'src/core/database/mongo/mongo.service';
 import { MongoRepository } from 'src/core/database/mongo/mongo.repository';
@@ -27,7 +33,10 @@ export class ProductService extends MongoRepository<Product> {
         if (payload.name) {
           payload.name = TextNormalizer.normalize(payload.name, NormalizeType.TITLE);
         }
-        const filter: FilterQuery<Product> = {};
+        const filter: FilterQuery<Product> = {
+          name: payload.name,
+          categoryId: payload.categoryId,
+        };
 
         const existing = await this.findOne(filter, {
           session,
@@ -102,10 +111,15 @@ export class ProductService extends MongoRepository<Product> {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ['$productId', '$$productId'] },
+                $expr: {
+                  $and: [
+                    { $eq: ['$productId', '$$productId'] },
+                    { $lte: ['$effectiveAt', new Date()] }, // ✅ KEY FIX
+                  ],
+                },
               },
             },
-            { $sort: { effectiveAt: -1, _id: -1 } }, // safer sort
+            { $sort: { effectiveAt: -1, _id: -1 } },
             { $limit: 2 },
           ],
           as: 'priceData',
@@ -287,10 +301,15 @@ export class ProductService extends MongoRepository<Product> {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ['$productId', '$$productId'] },
+                $expr: {
+                  $and: [
+                    { $eq: ['$productId', '$$productId'] },
+                    { $lte: ['$effectiveAt', new Date()] }, // ✅ KEY FIX
+                  ],
+                },
               },
             },
-            { $sort: { effectiveAt: -1, _id: -1 } }, // safer sort
+            { $sort: { effectiveAt: -1, _id: -1 } },
             { $limit: 2 },
           ],
           as: 'priceData',
@@ -393,10 +412,36 @@ export class ProductService extends MongoRepository<Product> {
   async update(productId: string, dto: UpdateProductDto) {
     try {
       return await this.withTransaction(async (session) => {
+        /* ======================================================
+         * NORMALIZE NAME
+         * ====================================================== */
         if (dto.name) {
           dto.name = TextNormalizer.normalize(dto.name, NormalizeType.TITLE);
         }
 
+        /* ======================================================
+         * DUPLICATE CHECK (name + categoryId)
+         * ====================================================== */
+        if (dto.name || dto.categoryId) {
+          const existing = await this.model.findOne(
+            {
+              name: dto.name,
+              categoryId: dto.categoryId,
+              productId: { $ne: productId }, // exclude current product
+              isDeleted: { $ne: true },
+            },
+            null,
+            { session },
+          );
+
+          if (existing) {
+            throw new BadRequestException(PRODUCT.DUPLICATE);
+          }
+        }
+
+        /* ======================================================
+         * UPDATE
+         * ====================================================== */
         const doc = await this.updateOne({ productId }, dto, { session, new: true });
 
         if (!doc) throw new NotFoundException(PRODUCT.NOT_FOUND);
