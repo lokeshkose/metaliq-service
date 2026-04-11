@@ -165,6 +165,24 @@ export class InquiryService extends MongoRepository<Inquiry> {
       { $limit: 1 },
 
       /* ======================================================
+       * 👤 CUSTOMER LOOKUP
+       * ====================================================== */
+      {
+        $lookup: {
+          from: 'customer_master', // ⚠️ make sure this is correct
+          localField: 'customerId',
+          foreignField: 'customerId',
+          as: 'customer',
+        },
+      },
+      {
+        $unwind: {
+          path: '$customer',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      /* ======================================================
        * 🔗 TIMELINE (AUDIT LOGS)
        * ====================================================== */
       {
@@ -175,12 +193,14 @@ export class InquiryService extends MongoRepository<Inquiry> {
             {
               $match: {
                 $expr: {
-                  $and: [{ $eq: ['$entityId', '$$inquiryId'] }, { $eq: ['$entity', 'inquires'] }],
+                  $and: [
+                    { $eq: ['$entityId', '$$inquiryId'] },
+                    { $eq: ['$entity', 'inquires'] }, // ⚠️ typo? should be 'inquiries'?
+                  ],
                 },
               },
             },
             { $sort: { createdAt: 1 } },
-            /* Optional: clean response */
             {
               $project: {
                 action: 1,

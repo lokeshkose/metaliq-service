@@ -13,7 +13,7 @@ export class CustomerQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search text', example: 'abc' })
   @IsOptional()
   @IsString()
-  @MinLength(2)
+  // @MinLength(2)
   @MaxLength(100)
   searchText?: string;
 

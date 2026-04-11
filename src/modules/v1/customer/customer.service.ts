@@ -198,10 +198,27 @@ export class CustomerService extends MongoRepository<Customer> {
       throw new NotFoundException(CUSTOMER.NOT_FOUND);
     }
 
+    /* ======================================================
+     * GET LAST 5 INQUIRIES
+     * ====================================================== */
+    const inquiries = await this.InquiryModal.find({
+      customerId,
+      isDeleted: { $ne: true },
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    /* ======================================================
+     * RESPONSE
+     * ====================================================== */
     return {
       statusCode: HttpStatus.OK,
       message: CUSTOMER.FETCHED,
-      data: doc,
+      data: {
+        ...doc,
+        recentInquiries: inquiries, // ✅ last 5
+      },
     };
   }
 
