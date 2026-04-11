@@ -147,10 +147,51 @@ export class CustomerService extends MongoRepository<Customer> {
       lean: true,
     });
 
+    const customers = result.items;
+    const customerIds = customers.map((c) => c.customerId);
+
+    /* ======================================================
+     * STEP 3: AGGREGATE INQUIRY COUNTS
+     * ====================================================== */
+    const inquiryCounts = await this.InquiryModal.aggregate([
+      {
+        $match: {
+          isDeleted: { $ne: true },
+          customerId: { $in: customerIds },
+        },
+      },
+      {
+        $group: {
+          _id: '$customerId',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    /* ======================================================
+     * STEP 4: MAP COUNTS
+     * ====================================================== */
+    const inquiryCountMap = new Map<string, number>();
+
+    inquiryCounts.forEach((item) => {
+      inquiryCountMap.set(item._id, item.count);
+    });
+
+    /* ======================================================
+     * STEP 5: ATTACH TO CUSTOMERS
+     * ====================================================== */
+    const enrichedCustomers = customers.map((customer) => ({
+      ...customer,
+      inquiryCount: inquiryCountMap.get(customer.customerId) || 0, // ✅ default 0
+    }));
+
+    /* ======================================================
+     * RESPONSE
+     * ====================================================== */
     return {
       statusCode: HttpStatus.OK,
       message: CUSTOMER.FETCHED,
-      data: result.items,
+      data: enrichedCustomers,
       meta: result.meta,
     };
   }
