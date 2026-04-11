@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsBoolean,
+  Matches,
+  IsDateString,
+} from 'class-validator';
 import { Platform } from 'src/shared/enums/app.enums';
 import { VersionStatus } from 'src/shared/enums/version.enums';
 
@@ -9,32 +17,74 @@ export class CreateVersionDto {
    * =================
    * DTO for creating Version
    */
-  @ApiPropertyOptional({ type: String })
-  @IsOptional()
-  @IsString()
-  versionNumber?: string;
 
-  @ApiPropertyOptional({ enum: Platform, enumName: 'Platform' })
-  @IsOptional()
+  @ApiProperty({ example: '1.2.0' })
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^\d+\.\d+\.\d+$/, {
+    message: 'versionNumber must be in format x.y.z',
+  })
+  versionNumber!: string;
+
+  @ApiProperty({ enum: Platform })
+  @IsNotEmpty()
   @IsEnum(Platform)
-  platform?: Platform;
+  platform!: Platform;
 
-  @ApiPropertyOptional({ type: String })
+  /* ======================================================
+   * RELEASE NOTES
+   * ====================================================== */
+
+  @ApiPropertyOptional({ example: 'New UI improvements' })
   @IsOptional()
   @IsString()
-  whatsNew?: string;
+  features?: string;
 
-  @ApiPropertyOptional({ type: Boolean })
+  @ApiPropertyOptional({ example: 'Bug fixes and performance improvements' })
+  @IsOptional()
+  @IsString()
+  bugFixes?: string;
+
+  /* ======================================================
+   * UPDATE CONTROL
+   * ====================================================== */
+
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   forceUpdate?: boolean;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({ example: '1.0.0' })
   @IsOptional()
   @IsString()
   minSupportedVersion?: string;
 
-  @ApiPropertyOptional({ enum: VersionStatus, enumName: 'VersionStatus' })
+  /* ======================================================
+   * OPTIONAL METADATA
+   * ====================================================== */
+
+  @ApiPropertyOptional({ example: '100' })
+  @IsOptional()
+  @IsString()
+  buildNumber?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://play.google.com/store/apps/details?id=com.app',
+  })
+  @IsOptional()
+  @IsString()
+  downloadUrl?: string;
+
+  @ApiPropertyOptional({ example: '2026-04-11T00:00:00.000Z' })
+  @IsOptional()
+  @IsDateString()
+  releaseDate?: Date;
+
+  /* ======================================================
+   * STATUS
+   * ====================================================== */
+
+  @ApiPropertyOptional({ enum: VersionStatus })
   @IsOptional()
   @IsEnum(VersionStatus)
   status?: VersionStatus;

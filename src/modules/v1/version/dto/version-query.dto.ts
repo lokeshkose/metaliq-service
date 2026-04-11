@@ -2,7 +2,7 @@ import { Platform } from 'src/shared/enums/app.enums';
 import { VersionStatus } from 'src/shared/enums/version.enums';
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MinLength, MaxLength, IsEnum, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, MaxLength, IsEnum, IsBoolean } from 'class-validator';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
 /**
@@ -11,14 +11,16 @@ import { PaginationDto } from 'src/shared/dto/pagination.dto';
  * DTO for querying Version
  */
 export class VersionQueryDto extends PaginationDto {
-  @ApiPropertyOptional({ description: 'Search text', example: 'abc' })
+  @ApiPropertyOptional({
+    description: 'Search by versionId or versionNumber',
+    example: '1.2',
+  })
   @IsOptional()
   @IsString()
-  @MinLength(2)
   @MaxLength(100)
   searchText?: string;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({ example: '1.2.0' })
   @IsOptional()
   @IsString()
   versionNumber?: string;
@@ -28,17 +30,12 @@ export class VersionQueryDto extends PaginationDto {
   @IsEnum(Platform)
   platform?: Platform;
 
-  @ApiPropertyOptional({ type: String })
-  @IsOptional()
-  @IsString()
-  whatsNew?: string;
-
-  @ApiPropertyOptional({ type: Boolean })
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   forceUpdate?: boolean;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({ example: '1.0.0' })
   @IsOptional()
   @IsString()
   minSupportedVersion?: string;

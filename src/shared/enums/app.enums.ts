@@ -1,6 +1,7 @@
 export enum Platform {
   WEB = 'WEB',
-  MOBILE = 'MOBILE',
+  ANDROID = 'ANDROID',
+  IOS = 'IOS',
 }
 
 export enum Status {
