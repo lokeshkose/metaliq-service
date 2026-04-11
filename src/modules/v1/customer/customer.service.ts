@@ -351,7 +351,7 @@ export class CustomerService extends MongoRepository<Customer> {
      * ====================================================== */
     const response: Record<string, number> = {
       [InquiryStatus.PENDING]: 0,
-      [InquiryStatus.CLOSED]: 0,
+      [InquiryStatus.COMPLETED]: 0,
       [InquiryStatus.REJECTED]: 0,
       [InquiryStatus.RESPONDED]: 0,
       [InquiryStatus.CANCELLED]: 0,

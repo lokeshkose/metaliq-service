@@ -91,6 +91,15 @@ export class Inquiry {
   @Prop({ type: String, required: true })
   deliveryCity!: string;
 
+  @Prop({ default: 0, type: Number })
+  totalOfferedAmount!: number;
+
+  @Prop({ default: 0, type: Number })
+  availabledStock!: number;
+
+  @Prop({ type: String, default: null })
+  estimatedDeliveryDays!: string;
+
   /* ======================================================
    * STATUS
    * ====================================================== */

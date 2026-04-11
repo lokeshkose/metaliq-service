@@ -38,6 +38,7 @@ import { UpdatePriceDto } from './dto/update-price.dto';
 import { PriceQueryDto } from './dto/price-query.dto';
 import { PRICE } from './price.constants';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Public } from 'src/core/decorators/public.decorator';
 
 @ApiTags('Price')
 @FeatureFlag(API_MODULE_ENABLE_KEYS.PRICE)

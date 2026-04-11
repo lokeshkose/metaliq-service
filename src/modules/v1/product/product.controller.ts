@@ -13,6 +13,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
@@ -69,6 +70,11 @@ export class ProductController {
   )
   async create(@Body() dto: CreateProductDto) {
     return this.service.create(dto);
+  }
+
+  @Get('export')
+  async exportProducts(@Query() query: ProductQueryDto, @Res() res: Response) {
+    return this.service.exportProducts(query, res);
   }
 
   /**

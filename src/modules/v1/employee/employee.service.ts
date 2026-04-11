@@ -412,7 +412,7 @@ export class EmployeeService extends MongoRepository<Employee> {
     const formatStatus = (raw) => {
       const base: Record<InquiryStatus, number> = {
         [InquiryStatus.PENDING]: 0,
-        [InquiryStatus.CLOSED]: 0,
+        [InquiryStatus.COMPLETED]: 0,
         [InquiryStatus.REJECTED]: 0,
         [InquiryStatus.RESPONDED]: 0,
         [InquiryStatus.CANCELLED]: 0,

@@ -8,3 +8,8 @@ export enum ProductStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
 }
+
+export enum FileType {
+  PDF = 'PDF',
+  EXCEL = 'EXCEL',
+}

@@ -1,4 +1,4 @@
-import { ProductStatus } from 'src/shared/enums/product.enums';
+import { FileType, ProductStatus } from 'src/shared/enums/product.enums';
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
@@ -12,6 +12,7 @@ import { PaginationDto } from 'src/shared/dto/pagination.dto';
  * All fields are optional - supports partial matching and range queries
  * Extends PaginationDto for pagination support
  */
+
 export class ProductQueryDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Search by name, code, or identifier (supports partial matching)',
@@ -46,4 +47,17 @@ export class ProductQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Filter by status', example: 'ACTIVE' })
   @IsOptional()
   status?: ProductStatus;
+
+  /* ======================================================
+   * EXPORT TYPE
+   * ====================================================== */
+
+  @ApiPropertyOptional({
+    enum: FileType,
+    description: 'Export file type (EXCEL or PDF)',
+    example: FileType.EXCEL,
+  })
+  @IsOptional()
+  @IsEnum(FileType)
+  fileType?: FileType;
 }

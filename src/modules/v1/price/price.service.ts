@@ -178,7 +178,7 @@ export class PriceService extends MongoRepository<Price> {
     /* ======================================================
      * HEADER VALIDATION
      * ====================================================== */
-    const requiredHeaders = ['productId', 'price'];
+    const requiredHeaders = ['Product ID', 'New Price'];
     const fileHeaders = Object.keys(rows[0]);
 
     const missingHeaders = requiredHeaders.filter((h) => !fileHeaders.includes(h));
@@ -188,9 +188,9 @@ export class PriceService extends MongoRepository<Price> {
     }
 
     /* ======================================================
-     * FETCH ALL PRODUCTS
+     * FETCH PRODUCTS
      * ====================================================== */
-    const productIds = [...new Set(rows.map((r) => r.productId).filter(Boolean))];
+    const productIds = [...new Set(rows.map((r) => r['Product ID']).filter(Boolean))];
 
     const products = await this.productService.find(
       { productId: { $in: productIds }, isDeleted: { $ne: true } } as any,
@@ -210,55 +210,33 @@ export class PriceService extends MongoRepository<Price> {
       const rowNumber = i + 2;
 
       try {
+        const productId = row['Product ID'];
+        const newPrice = row['New Price'];
+
         /* ---------- VALIDATION ---------- */
-        if (!row.productId) {
-          throw new Error('productId is required');
+        if (!productId) {
+          throw new Error('Product ID is required');
         }
 
-        if (!productMap.has(row.productId)) {
-          throw new Error(`Invalid productId: ${row.productId}`);
+        if (!productMap.has(productId)) {
+          throw new Error(`Invalid Product ID: ${productId}`);
         }
 
-        if (!row.price || isNaN(row.price)) {
-          throw new Error('price must be a valid number');
+        if (newPrice === null || newPrice === '' || isNaN(newPrice)) {
+          throw new Error('New Price must be a valid number');
         }
 
-        /* ---------- EFFECTIVE DATE HANDLING ---------- */
+        /* ---------- EFFECTIVE DATE ---------- */
         const now = new Date();
-        let effectiveAt: Date;
 
-        if (row.effectiveAt) {
-          const inputDate = new Date(row.effectiveAt);
-
-          if (isNaN(inputDate.getTime())) {
-            throw new Error('Invalid effectiveAt date');
-          }
-
-          // ✅ merge input date + current time
-          effectiveAt = new Date(
-            inputDate.getFullYear(),
-            inputDate.getMonth(),
-            inputDate.getDate(),
-            now.getHours(),
-            now.getMinutes(),
-            now.getSeconds(),
-            now.getMilliseconds(),
-          );
-        } else {
-          effectiveAt = now;
-        }
-
-        // ❌ prevent future dates
-        if (effectiveAt > now) {
-          throw new Error('effectiveAt cannot be in the future');
-        }
+        const effectiveAt = now; // always current
 
         /* ---------- TRANSFORM ---------- */
         const payload = {
           priceId: IdGenerator.generate('PRIC', 8),
-          productId: row.productId,
-          price: Number(row.price),
-          type: row.type || PriceType.STANDARD,
+          productId,
+          price: Number(newPrice),
+          type: PriceType.STANDARD,
           effectiveAt,
           status: PriceStatus.ACTIVE,
         };

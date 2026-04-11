@@ -17,13 +17,13 @@ export class CreateInquiryDto {
    * PRODUCT
    * ====================================================== */
 
-  @ApiProperty({ example: 'PROD001' })
+  @ApiProperty({ example: 'PROD001', type: String })
   @IsNotEmpty()
   @IsString()
   @Length(2, 50)
   productId!: string;
 
-  @ApiProperty({ example: 'Apple' })
+  @ApiProperty({ example: 'Apple', type: String })
   @IsNotEmpty()
   @IsString()
   @Length(2, 100)
@@ -33,12 +33,12 @@ export class CreateInquiryDto {
    * CUSTOMER
    * ====================================================== */
 
-  @ApiProperty({ example: 'CUST001' })
+  @ApiProperty({ example: 'CUST001', type: String })
   @IsNotEmpty()
   @IsString()
   customerId!: string;
 
-  @ApiProperty({ example: 'John Doe' })
+  @ApiProperty({ example: 'John Doe', type: String })
   @IsNotEmpty()
   @IsString()
   @Length(2, 100)
@@ -48,7 +48,7 @@ export class CreateInquiryDto {
    * INQUIRY DETAILS
    * ====================================================== */
 
-  @ApiProperty({ example: 'Bulk purchase requirement' })
+  @ApiProperty({ example: 'Bulk purchase requirement', type: String })
   @IsNotEmpty()
   @IsString()
   @Length(3, 200)
@@ -58,33 +58,52 @@ export class CreateInquiryDto {
    * PRICING
    * ====================================================== */
 
-  @ApiProperty({ example: 100 })
+  @ApiProperty({ example: 100, type: Number })
   @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   basePrice!: number;
 
-  @ApiProperty({ example: 5000 })
+  @ApiProperty({ example: 5000, type: Number })
   @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   estimatedValue!: number;
 
-  @ApiProperty({ example: 120 })
+  @ApiProperty({ example: 120, type: Number })
   @Type(() => Number)
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   customerPrice!: number;
 
-  @ApiPropertyOptional({ example: 110 })
+  @ApiPropertyOptional({ example: 110, type: Number })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   offeredPrice?: number;
+
+  @ApiPropertyOptional({ example: 110, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  totalOfferedAmount?: number;
+
+  @ApiPropertyOptional({ example: 110, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  availabledStock?: number;
+
+  @ApiPropertyOptional({ example: '3-4 Days', type: String })
+  @IsOptional()
+  @IsString()
+  estimatedDeliveryDays?: string;
 
   /* ======================================================
    * QUANTITY
