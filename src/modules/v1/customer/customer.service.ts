@@ -147,12 +147,10 @@ export class CustomerService extends MongoRepository<Customer> {
       lean: true,
     });
 
-    const customers = result.items;
+    const customers = result.items.map((c: any) => c._doc || c);
+
     const customerIds = customers.map((c) => c.customerId);
 
-    /* ======================================================
-     * STEP 3: AGGREGATE INQUIRY COUNTS
-     * ====================================================== */
     const inquiryCounts = await this.InquiryModal.aggregate([
       {
         $match: {
@@ -168,21 +166,15 @@ export class CustomerService extends MongoRepository<Customer> {
       },
     ]);
 
-    /* ======================================================
-     * STEP 4: MAP COUNTS
-     * ====================================================== */
     const inquiryCountMap = new Map<string, number>();
 
     inquiryCounts.forEach((item) => {
       inquiryCountMap.set(item._id, item.count);
     });
 
-    /* ======================================================
-     * STEP 5: ATTACH TO CUSTOMERS
-     * ====================================================== */
     const enrichedCustomers = customers.map((customer) => ({
       ...customer,
-      inquiryCount: inquiryCountMap.get(customer.customerId) || 0, // ✅ default 0
+      inquiryCount: inquiryCountMap.get(customer.customerId) || 0,
     }));
 
     /* ======================================================
